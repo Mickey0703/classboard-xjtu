@@ -1,0 +1,22 @@
+import { CalendarDays, ClipboardList, GraduationCap, Home, LockKeyhole } from 'lucide-react';
+
+export type Page = 'today' | 'timetable' | 'schedule' | 'admin';
+const tabs: { id: Page; label: string; icon: typeof Home }[] = [
+  { id: 'today', label: '今日', icon: Home },
+  { id: 'timetable', label: '课表', icon: CalendarDays },
+  { id: 'schedule', label: '日程', icon: ClipboardList }
+];
+
+export default function Shell({ page, setPage, children }: { page: Page; setPage: (p: Page) => void; children: React.ReactNode }) {
+  return <div className="app-shell">
+    <header className="topbar"><div className="topbar-inner">
+      <div className="brand-mark" aria-hidden="true"><GraduationCap size={25}/></div>
+      <div className="brand-copy"><strong>西交班务</strong><span>西安交通大学 · 班级生活看板</span></div>
+      <button className="admin-link" onClick={() => setPage('admin')} aria-label="班委管理"><LockKeyhole size={16}/><span>班委管理</span></button>
+    </div></header>
+    <main className="main-wrap">{children}</main>
+    <nav className="bottom-nav" aria-label="主导航">{tabs.map(({ id, label, icon: Icon }) =>
+      <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(id)} aria-current={page === id ? 'page' : undefined}><Icon size={20}/><span>{label}</span></button>
+    )}</nav>
+  </div>;
+}
