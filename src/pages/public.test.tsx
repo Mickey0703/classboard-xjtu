@@ -3,6 +3,7 @@ import { expect, it, vi } from 'vitest';
 import Today from './Today';
 import Timetable from './Timetable';
 import Schedule from './Schedule';
+import App from '../App';
 import type { Snapshot } from '../domain/types';
 
 const snapshot: Snapshot = {
@@ -26,9 +27,35 @@ it('switches teaching weeks in the timetable', () => {
   expect(screen.getByText(/第 2 周/)).toBeTruthy();
 });
 
+it('shows a course in every period it occupies', () => {
+  const twoPeriods = { ...snapshot, semester: { ...snapshot.semester, periods: [...snapshot.semester.periods, { number: 2, start: '08:55', end: '09:40' }] }, courses: [{ ...snapshot.courses[0], endPeriod: 2 }] };
+  render(<Timetable snapshot={twoPeriods} now={new Date('2026-09-28T00:00:00Z')} />);
+  expect(screen.getAllByText('高等数学（演示）')).toHaveLength(2);
+});
+
 it('filters schedule items by category', () => {
   render(<Schedule snapshot={snapshot} now={new Date('2026-09-28T00:00:00Z')} />);
   expect(screen.getByText('班会（演示）')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '学习' }));
   expect(screen.queryByText('班会（演示）')).toBeNull();
+});
+
+it('filters schedule items by selected date', () => {
+  render(<Schedule snapshot={snapshot} now={new Date('2026-09-28T00:00:00Z')} />);
+  fireEvent.change(screen.getByLabelText('按截止日期筛选'), { target: { value: '2026-09-30' } });
+  expect(screen.queryByText('班会（演示）')).toBeNull();
+});
+
+it('explains when the class has not configured a semester', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ semester: { title: '', startDate: '', endDate: '', periods: [] }, courses: [], events: [], demo: false }) })));
+  render(<App />);
+  expect(await screen.findByText(/尚未设置学期/)).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
+it('uses the class name configured by the committee in the header', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ ...snapshot, semester: { ...snapshot.semester, className: '能动学院某班' } }) })));
+  render(<App />);
+  expect(await screen.findByText('能动学院某班')).toBeTruthy();
+  vi.unstubAllGlobals();
 });

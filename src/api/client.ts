@@ -1,7 +1,7 @@
 import type { Snapshot } from '../domain/types';
 
 export async function fetchSnapshot(): Promise<Snapshot> {
-  const response = await fetch('/api/snapshot');
+  const response = await fetch('/api/snapshot', { cache: 'no-store' });
   if (!response.ok) throw new Error('班务数据暂不可用');
   return response.json() as Promise<Snapshot>;
 }

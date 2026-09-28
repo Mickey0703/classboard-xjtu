@@ -3,8 +3,13 @@ import { denied, requireAdmin, type AdminData, type AdminEnv } from './auth';
 
 export const onRequest: PagesFunction<AdminEnv, string, AdminData>[] = [
   (context) => {
-    if (!context.env.ACCESS_DOMAIN || !context.env.ACCESS_AUD || !context.env.ADMIN_EMAILS) return denied();
-    return cloudflareAccessPlugin({ domain: context.env.ACCESS_DOMAIN, aud: context.env.ACCESS_AUD })(context);
+    const host = new URL(context.request.url).hostname;
+    if (context.env.LOCAL_DEV_MODE === 'true' && ['localhost', '127.0.0.1'].includes(host) && context.env.LOCAL_DEV_ADMIN_EMAIL) {
+      context.data.cloudflareAccess = { JWT: { payload: { email: context.env.LOCAL_DEV_ADMIN_EMAIL } } };
+      return context.next();
+    }
+    if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(context.env.ACCESS_DOMAIN ?? '') || !context.env.ACCESS_AUD || !context.env.ADMIN_EMAILS) return denied();
+    return cloudflareAccessPlugin({ domain: context.env.ACCESS_DOMAIN as `https://${string}.cloudflareaccess.com`, aud: context.env.ACCESS_AUD })(context);
   },
   (context) => requireAdmin(context) ? context.next() : denied()
 ];

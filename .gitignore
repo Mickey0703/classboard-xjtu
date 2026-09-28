@@ -5,5 +5,6 @@ dist/
 .superpowers/
 playwright-report/
 test-results/
+.playwright-browsers/
 .env*
 !.env.example

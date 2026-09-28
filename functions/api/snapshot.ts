@@ -14,12 +14,12 @@ export async function loadSnapshot(db: D1Database): Promise<Snapshot> {
   const semester: Semester = values.semester ? JSON.parse(values.semester) as Semester : { title: '', startDate: '', endDate: '', periods: [] };
   const courses: Course[] = (courseRows.results ?? []).map(row => ({ id: row.id, title: row.title, teacher: row.teacher, location: row.location, weekday: row.weekday, startPeriod: row.start_period, endPeriod: row.end_period, startWeek: row.start_week, endWeek: row.end_week, weekType: row.week_type }));
   const events: EventItem[] = (eventRows.results ?? []).map(row => ({ id: row.id, title: row.title, description: row.description, category: row.category, startAt: row.start_at, dueAt: row.due_at, done: Boolean(row.done) }));
-  return { semester, courses, events, demo: values.demo !== 'false' };
+  return { semester, courses, events, demo: values.demo === 'true' };
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   try {
-    return Response.json(await loadSnapshot(env.DB), { headers: { 'Cache-Control': 'public, max-age=30' } });
+    return Response.json(await loadSnapshot(env.DB), { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return Response.json({ error: '班务数据暂不可用' }, { status: 503 });
   }

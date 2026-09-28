@@ -1,5 +1,5 @@
 export interface Period { number: number; start: string; end: string }
-export interface Semester { title: string; startDate: string; endDate: string; periods: Period[] }
+export interface Semester { title: string; className?: string; startDate: string; endDate: string; periods: Period[] }
 export type WeekType = 'all' | 'odd' | 'even';
 export interface Course {
   id: string; title: string; teacher: string; location: string;

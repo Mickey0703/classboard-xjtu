@@ -17,7 +17,7 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
   const events = snapshot.events.filter(e => !e.done).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const near = events.filter(e => Date.parse(e.dueAt) >= now.getTime()).slice(0, 3);
   return <div className="page-stack">
-    <section className="welcome"><div><span className="eyebrow">CLASSBOARD · XJTU</span><h1>今天，先看这几件事。</h1><p>{dayFmt.format(now)} · {week > 0 ? `第 ${week} 周` : '学期未开始'}</p></div><div className="welcome-number"><strong>{classes.length}</strong><span>今日课程</span></div></section>
+    <section className="welcome"><div><span className="eyebrow">CLASSBOARD · XJTU</span><h1>今天，有什么安排？</h1><p>{dayFmt.format(now)} · {week > 0 ? `第 ${week} 周` : '学期未开始'}</p></div><div className="welcome-number"><strong>{classes.length}</strong><span>今日课程</span></div></section>
     {snapshot.demo && <div className="demo-banner"><Sparkles size={16}/> 当前展示演示数据；班委录入课表和事项后将同步更新。</div>}
     <div className="summary-strip"><div><CalendarDays size={18}/><span>今天 <strong>{classes.length}</strong> 节课</span></div><div><CheckCircle2 size={18}/><span>待完成 <strong>{events.length}</strong> 件事</span></div><div><Clock3 size={18}/><span>{next ? `下一节 ${timeFmt.format(next.startAt)}` : '暂无后续课程'}</span></div></div>
     <div className="dashboard-grid">
@@ -31,7 +31,7 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
         </section>
       </div>
       <div className="column-stack">
-        <section className="card weather-card"><div className="section-head"><h2>西安天气</h2><CloudSun size={20}/></div>{!weather ? <div className="weather-placeholder">正在查询西安天气…</div> : weather.available ? <div className="weather-current"><strong>{weather.temperature}°</strong><span>{weather.condition}<br/>体感 {weather.feelsLike}° · 湿度 {weather.humidity}% · 风速 {weather.wind} km/h</span></div> : <div className="weather-placeholder">天气暂不可用</div>}</section>
+        <section className="card weather-card"><div className="section-head"><h2>西安天气</h2><CloudSun size={20}/></div>{!weather ? <div className="weather-placeholder">正在查询西安天气…</div> : weather.available ? <div className="weather-current"><strong>{weather.temperature}°</strong><span>{weather.condition}<br/>体感 {weather.feelsLike}° · 湿度 {weather.humidity}% · 风速 {weather.wind} km/h</span></div> : <div className="weather-placeholder">天气暂不可用</div>}<a className="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noreferrer">天气数据：Open-Meteo</a></section>
         <section className="card"><div className="section-head"><h2>近期事项</h2><span className="muted">未来安排</span></div>{near.length ? <div className="event-mini-list">{near.map(e => <div className="event-mini" key={e.id}><span className={getEventStatus(now,e) === 'soon' ? 'event-dot urgent' : 'event-dot'}/><div><strong>{e.title}</strong><small>{e.category} · 截止 {new Date(e.dueAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small></div></div>)}</div> : <p className="empty-note">近期暂无待办事项。</p>}
           <button className="text-action" onClick={() => onNavigate('schedule')}>查看全部日程 <ArrowRight size={16}/></button>
         </section>
