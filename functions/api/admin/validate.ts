@@ -13,6 +13,6 @@ export function validEvent(e: Partial<EventItem>): e is EventItem {
     text(e.startAt, 40) && text(e.dueAt, 40) && !Number.isNaN(Date.parse(e.startAt)) && !Number.isNaN(Date.parse(e.dueAt)) && Date.parse(e.startAt) <= Date.parse(e.dueAt) && typeof e.done === 'boolean';
 }
 export function validSemester(s: Partial<Semester>): s is Semester {
-  return text(s.title, 100) && /^\d{4}-\d{2}-\d{2}$/.test(s.startDate ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(s.endDate ?? '') && s.startDate! <= s.endDate! &&
+  return text(s.title, 100) && (s.className === undefined || (typeof s.className === 'string' && s.className.length <= 60)) && /^\d{4}-\d{2}-\d{2}$/.test(s.startDate ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(s.endDate ?? '') && s.startDate! <= s.endDate! &&
     Array.isArray(s.periods) && s.periods.length > 0 && s.periods.length <= 20 && s.periods.every(p => integer(p.number, 1, 20) && /^\d{2}:\d{2}$/.test(p.start) && /^\d{2}:\d{2}$/.test(p.end) && p.start < p.end);
 }
