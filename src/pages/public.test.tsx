@@ -4,6 +4,7 @@ import Today from './Today';
 import Timetable from './Timetable';
 import Schedule from './Schedule';
 import App from '../App';
+import Shell from '../components/Shell';
 import type { Snapshot } from '../domain/types';
 
 const snapshot: Snapshot = {
@@ -20,8 +21,15 @@ it("shows today's course and clearly labels demo content", async () => {
   expect(screen.getByText(/演示数据/)).toBeTruthy();
   expect(screen.getAllByText(/高等数学（演示）/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/下一节/).length).toBeGreaterThan(0);
+  expect(screen.getByRole('img', { name: 'ID 2601 班徽' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: '查看 ID 2601 完整班徽' }).getAttribute('href')).toBe('/class-emblem.png');
   expect(await screen.findByText('天气暂不可用')).toBeTruthy();
   vi.unstubAllGlobals();
+});
+
+it('shows the class emblem in the shared header', () => {
+  render(<Shell page="today" setPage={vi.fn()}><div>内容</div></Shell>);
+  expect(screen.getByRole('img', { name: 'ID 2601 班徽' }).getAttribute('src')).toBe('/class-emblem.png');
 });
 
 it('shows the date when the next class is on a later day', async () => {

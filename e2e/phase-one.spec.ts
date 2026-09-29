@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-test('public pages work on phone and course week changes', async ({ page }) => {
+test('public pages work on phone and course week changes', async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.getByText('西交班务').first()).toBeVisible();
   await expect(page.getByText(/演示数据/).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: '查看 ID 2601 完整班徽' })).toHaveAttribute('href', '/class-emblem.png');
+  expect((await request.get('/class-emblem.png')).status()).toBe(200);
   await page.screenshot({ path: 'test-results/home-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });

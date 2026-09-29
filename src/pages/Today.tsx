@@ -21,6 +21,7 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
   const near = events.filter(e => Date.parse(e.dueAt) >= now.getTime()).slice(0, 3);
   return <div className="page-stack">
     <section className="welcome"><div><span className="eyebrow">CLASSBOARD · XJTU</span><h1>今天的安排</h1><p>{dayFmt.format(now)} · {week > 0 ? `第 ${week} 周` : '学期未开始'}</p></div><div className="welcome-number"><strong>{classes.length}</strong><span>今日课程</span></div></section>
+    <a className="identity-strip" href="/class-emblem.png" target="_blank" rel="noreferrer" aria-label="查看 ID 2601 完整班徽"><div className="identity-art"><img src="/class-emblem.png" alt="ID 2601 班徽"/></div><div className="identity-copy"><span>XJTU–POLIMI JOINT SCHOOL</span><strong>ID 2601 · 我们的班级空间</strong></div></a>
     {snapshot.demo && <div className="demo-banner"><Sparkles size={16}/> 当前展示演示数据；班委录入课表和事项后将同步更新。</div>}
     {important && <section className="home-notice"><div><span className="home-notice-label"><Bell size={14}/> {important.priority === 'urgent' ? '紧急通知' : '重要通知'}</span><h2>{important.title}</h2><p>{important.body}</p></div><button onClick={() => onNavigate('notifications')}>查看通知 <ArrowRight size={16}/></button></section>}
     <div className="summary-strip"><div><CalendarDays size={18}/><span>今天 <strong>{classes.length}</strong> 节课</span></div><div><CheckCircle2 size={18}/><span>待完成 <strong>{events.length}</strong> 件事</span></div><div><Clock3 size={18}/><span>{next ? `下一节 ${nextWhen}` : '暂无后续课程'}</span></div></div>
