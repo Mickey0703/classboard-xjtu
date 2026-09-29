@@ -1,6 +1,6 @@
-import type { Course } from '../../../src/domain/types';
+import type { Course, Semester } from '../../../src/domain/types';
 import { denied, invalid, requireAdmin, unavailable, type AdminData, type AdminEnv } from './auth';
-import { validCourse } from './validate';
+import { periodsContainCourse, validCourse, validSemester } from './validate';
 
 type Ctx = Parameters<PagesFunction<AdminEnv, string, AdminData>>[0];
 async function body(context: Ctx): Promise<Partial<Course>> { return context.request.json() as Promise<Partial<Course>>; }
@@ -9,6 +9,11 @@ async function save(context: Ctx, update: boolean): Promise<Response> {
   let course: Partial<Course>;
   try { course = await body(context); } catch { return invalid(); }
   if (!validCourse(course) || (update && !course.id)) return invalid();
+  try {
+    const setting = await context.env.DB.prepare('SELECT value FROM settings WHERE key=?').bind('semester').first<{ value: string }>();
+    const semester = setting ? JSON.parse(setting.value) as Semester : null;
+    if (!semester || !validSemester(semester) || !periodsContainCourse(course, semester)) return invalid('课程节次不在当前学期作息表内');
+  } catch { return unavailable(); }
   const id = update ? course.id! : crypto.randomUUID();
   try {
     const sql = update

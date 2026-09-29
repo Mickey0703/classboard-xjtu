@@ -1,4 +1,4 @@
-export interface AdminEnv { DB: D1Database; ADMIN_EMAILS: string; ACCESS_DOMAIN: string; ACCESS_AUD: string; LOCAL_DEV_MODE?: string; LOCAL_DEV_ADMIN_EMAIL?: string }
+export interface AdminEnv { DB: D1Database; ADMIN_EMAILS: string; ACCESS_DOMAIN: string; ACCESS_AUD: string; LOCAL_DEV_MODE?: string; LOCAL_DEV_ADMIN_EMAIL?: string; LOCAL_DEV_TOKEN?: string }
 export interface AdminData extends Record<string, unknown> { cloudflareAccess?: { JWT?: { payload?: { email?: string } } } }
 
 export function isAdminEmail(email: string | undefined, allowlist: string | undefined): boolean {

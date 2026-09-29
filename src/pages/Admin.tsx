@@ -14,17 +14,23 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
   const [course, setCourse] = useState<Course>(blankCourse);
   const [event, setEvent] = useState<EventItem>(blankEvent);
   const [semester, setSemester] = useState<Semester>(snapshot?.semester ?? { title: '', startDate: '', endDate: '', periods: [] });
+  const [periodText, setPeriodText] = useState(() => snapshot?.semester.periods.map(p => `${p.number},${p.start},${p.end}`).join('\n') ?? '');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   useEffect(() => { fetch('/api/admin/session', { credentials: 'include' }).then(async r => { if (!r.ok) throw Error('not signed in'); const body = await r.json() as { email: string }; setEmail(body.email); }).catch(() => setEmail(null)).finally(() => setChecking(false)); }, []);
-  useEffect(() => { if (snapshot?.semester) setSemester(snapshot.semester); }, [snapshot]);
+  useEffect(() => { if (snapshot?.semester) { setSemester(snapshot.semester); setPeriodText(snapshot.semester.periods.map(p => `${p.number},${p.start},${p.end}`).join('\n')); } }, [snapshot]);
   const action = async (path: Tab, method: 'POST'|'PUT'|'DELETE', body: unknown, label: string) => {
     setError(''); setSuccess('');
-    try { await saveAdmin(path, method, body); await onSaved(); setSuccess(`${label}成功`); if (path === 'courses' && method !== 'DELETE') setCourse(blankCourse); if (path === 'events' && method !== 'DELETE') setEvent(blankEvent); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '保存失败'); }
+    try { await saveAdmin(path, method, body); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : '保存失败'); return; }
+    try { await onSaved(); }
+    catch { setError('已保存，但刷新失败。请刷新页面确认最新数据，避免重复提交。'); return; }
+    setSuccess(`${label}成功`);
+    if (path === 'courses' && method !== 'DELETE') setCourse(blankCourse);
+    if (path === 'events' && method !== 'DELETE') setEvent(blankEvent);
   };
   return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS MANAGEMENT</span><h1>班委管理</h1><p>维护全班共享的课表与日程</p></div><LockKeyhole className="title-illustration" size={52}/></div><button className="text-action" onClick={onBack}><ArrowLeft size={16}/> 返回首页</button>
-    {checking ? <div className="state-card">正在检查班委登录状态…</div> : !email ? <div className="state-card"><h2>班委登录</h2><p>只有班委邮箱通过验证后才能修改班务资料。</p><a className="primary-button" href="/api/admin/session">使用班委邮箱登录</a></div> : <>
+    {checking ? <div className="state-card">正在检查班委登录状态…</div> : !email ? <div className="state-card"><h2>班委登录</h2><p>只有班委邮箱通过验证后才能修改班务资料。</p><a className="primary-button" href="/api/admin/login">使用班委邮箱登录</a></div> : <>
       <div className="demo-banner">当前班委：{email} · 修改会同步显示给所有访问者</div>
       <div className="admin-tabs">{(['courses','events','semester'] as const).map((value,i) => <button key={value} className={tab === value ? 'selected' : ''} onClick={() => { setTab(value); setError(''); setSuccess(''); }}>{['课程','日程','学期'][i]}</button>)}</div>
       <section className="card admin-card">
@@ -42,7 +48,7 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
           <label className="field wide">说明<textarea rows={3} value={event.description} onChange={e => setEvent({ ...event, description:e.target.value })}/></label>
         </div><p>{error && <span className="form-error">{error}</span>}{success && <span className="form-success">{success}</span>}</p><button className="primary-button" type="submit">保存事项</button>{event.id && <button type="button" className="outline-button" onClick={() => setEvent(blankEvent)}>取消编辑</button>}</form>
         <div className="admin-list">{snapshot?.events.map(item => <div className="admin-row" key={item.id}><div><strong>{item.title}</strong><small>{item.category} · 截止 {item.dueAt.slice(0,16).replace('T',' ')}</small></div><div><button onClick={() => setEvent(item)}>编辑</button><button aria-label={`删除${item.title}`} onClick={() => { if (confirm(`确定删除“${item.title}”？`)) void action('events','DELETE',{ id:item.id },'删除事项'); }}><Trash2 size={16}/></button></div></div>)}</div></>}
-        {tab === 'semester' && <><div className="section-head"><h2>学期设置</h2></div><form onSubmit={e => { e.preventDefault(); void action('semester','PUT',semester,'保存学期'); }}><div className="form-grid"><label className="field wide">班级名称<input value={semester.className ?? ''} placeholder="例如：能动学院某班" onChange={e => setSemester({ ...semester, className:e.target.value })}/></label><label className="field wide">学期名称<input required value={semester.title} onChange={e => setSemester({ ...semester, title:e.target.value })}/></label><label className="field">开学日期<input required type="date" value={semester.startDate} onChange={e => setSemester({ ...semester, startDate:e.target.value })}/></label><label className="field">结束日期<input required type="date" value={semester.endDate} onChange={e => setSemester({ ...semester, endDate:e.target.value })}/></label><label className="field wide">节次时间（每行格式：节次,开始,结束）<textarea rows={8} value={semester.periods.map(p => `${p.number},${p.start},${p.end}`).join('\n')} onChange={e => setSemester({ ...semester, periods:e.target.value.split('\n').filter(Boolean).map(line => { const [number,start,end] = line.split(','); return { number:Number(number), start:start ?? '', end:end ?? '' }; }) })}/></label></div><p>{error && <span className="form-error">{error}</span>}{success && <span className="form-success">{success}</span>}</p><button className="primary-button" type="submit">保存学期</button></form></>}
+        {tab === 'semester' && <><div className="section-head"><h2>学期设置</h2></div><form onSubmit={e => { e.preventDefault(); const periods = periodText.split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [number,start,end] = line.split(','); return { number:Number(number), start:start ?? '', end:end ?? '' }; }); void action('semester','PUT',{ ...semester, periods },'保存学期'); }}><div className="form-grid"><label className="field wide">班级名称<input value={semester.className ?? ''} placeholder="例如：能动学院某班" onChange={e => setSemester({ ...semester, className:e.target.value })}/></label><label className="field wide">学期名称<input required value={semester.title} onChange={e => setSemester({ ...semester, title:e.target.value })}/></label><label className="field">开学日期<input required type="date" value={semester.startDate} onChange={e => setSemester({ ...semester, startDate:e.target.value })}/></label><label className="field">结束日期<input required type="date" value={semester.endDate} onChange={e => setSemester({ ...semester, endDate:e.target.value })}/></label><label className="field wide">节次时间（每行格式：节次,开始,结束）<textarea rows={8} value={periodText} onChange={e => setPeriodText(e.target.value)}/></label></div><p>{error && <span className="form-error">{error}</span>}{success && <span className="form-success">{success}</span>}</p><button className="primary-button" type="submit">保存学期</button></form></>}
       </section>
     </>}
   </div>;

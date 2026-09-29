@@ -14,7 +14,7 @@ npm run db:demo
 npm run preview
 ```
 
-浏览 `http://127.0.0.1:8788`。普通 `preview` 不启用班委身份模拟，因此管理写入会返回 403。自动化测试单独使用 `preview:e2e`，它只在 localhost 且显式配置测试身份时绕过 Cloudflare Access；不要把该命令用于对外服务。
+浏览 `http://127.0.0.1:8788`。普通 `preview` 不启用班委身份模拟，因此管理写入会返回 403。自动化测试单独使用 `preview:e2e`，它只在 localhost 且提供测试令牌 Cookie 时模拟班委身份；不要把该命令用于对外服务。
 
 ```powershell
 npm test
@@ -42,7 +42,7 @@ npx playwright install chromium --only-shell
 4. 为 `/api/admin/*` 配置 Cloudflare Access 应用，允许班委邮箱登录。将 `ACCESS_DOMAIN`（例如 `https://your-team.cloudflareaccess.com`）、`ACCESS_AUD`（该 Access 应用的 Audience Tag）及 `ADMIN_EMAILS`（逗号分隔的班委邮箱）配置为 Pages Functions 的生产环境变量。管理接口还会验证 Access 签发的令牌与邮箱白名单。
 5. 发布后先核对：公开 `/api/snapshot` 可读；未登录写入 `/api/admin/courses` 被拒；班委登录后可保存课程并在公开课表看到更新。
 
-`LOCAL_DEV_MODE` 和 `LOCAL_DEV_ADMIN_EMAIL` 仅用于本地自动化测试，不应配置到生产环境。即使误配，本地绕过也要求请求域名是 `localhost` 或 `127.0.0.1`。
+`LOCAL_DEV_MODE`、`LOCAL_DEV_ADMIN_EMAIL` 和 `LOCAL_DEV_TOKEN` 仅用于本地自动化测试，不应配置到生产环境。即使误配，本地模拟也要求请求域名是 `localhost` 或 `127.0.0.1`，且带有匹配令牌的 Cookie。
 
 Cloudflare Pages、Functions、D1 及 Access 当前都有免费计划或额度；超额或使用自购域名可能产生额外成本。Cloudflare Zero Trust 免费计划开通时可能要求付款资料，即使该计划不收费。上线前请在账户中核对当前价格及限额。
 
