@@ -44,9 +44,9 @@ export default function NotificationAdmin({ onPublished }: { onPublished: () => 
     catch (cause) { setError(cause instanceof Error ? cause.message : '操作失败'); return; }
     try { await load(); }
     catch { setError(action === 'publish' ? '已发布，但列表刷新失败，请刷新页面确认' : '已撤回，但列表刷新失败，请刷新页面确认'); return; }
+    try { await onPublished(); }
+    catch { setError(action === 'publish' ? '已发布，但首页刷新失败，请刷新页面确认' : '已撤回，但首页刷新失败，请刷新页面确认'); return; }
     if (action === 'publish') {
-      try { await onPublished(); }
-      catch { setError('已发布，但首页刷新失败，请刷新页面确认'); return; }
       try { await loadStats(id); }
       catch { setError('已发布，但统计刷新失败，请稍后重试'); return; }
     }

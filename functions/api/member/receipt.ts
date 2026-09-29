@@ -23,9 +23,11 @@ export const onRequestPost: PagesFunction<MemberEnv, string, MemberData> = async
     if (row.status !== 'published') return Response.json({ error: '这条通知已撤回' }, { status: 409 });
     if (body.action !== 'ack' && row.kind !== 'task') return invalid('普通公告没有完成状态');
     const at = nowShanghai();
-    if (body.action === 'ack') await context.env.DB.prepare('UPDATE notification_recipients SET acknowledged_at=COALESCE(acknowledged_at, ?) WHERE notification_id=? AND member_email=?').bind(at, row.id, email).run();
-    if (body.action === 'complete') await context.env.DB.prepare('UPDATE notification_recipients SET acknowledged_at=COALESCE(acknowledged_at, ?), completed_at=COALESCE(completed_at, ?) WHERE notification_id=? AND member_email=?').bind(at, at, row.id, email).run();
-    if (body.action === 'undoComplete') await context.env.DB.prepare('UPDATE notification_recipients SET completed_at=NULL WHERE notification_id=? AND member_email=?').bind(row.id, email).run();
+    let result: D1Result;
+    if (body.action === 'ack') result = await context.env.DB.prepare("UPDATE notification_recipients SET acknowledged_at=COALESCE(acknowledged_at, ?) WHERE notification_id=? AND member_email=? AND EXISTS (SELECT 1 FROM notifications WHERE id=? AND status='published')").bind(at, row.id, email, row.id).run();
+    else if (body.action === 'complete') result = await context.env.DB.prepare("UPDATE notification_recipients SET acknowledged_at=COALESCE(acknowledged_at, ?), completed_at=COALESCE(completed_at, ?) WHERE notification_id=? AND member_email=? AND EXISTS (SELECT 1 FROM notifications WHERE id=? AND status='published')").bind(at, at, row.id, email, row.id).run();
+    else result = await context.env.DB.prepare("UPDATE notification_recipients SET completed_at=NULL WHERE notification_id=? AND member_email=? AND EXISTS (SELECT 1 FROM notifications WHERE id=? AND status='published')").bind(row.id, email, row.id).run();
+    if (result.meta?.changes === 0) return Response.json({ error: '通知已撤回，请刷新页面' }, { status: 409 });
     return Response.json({ notificationId: row.id, action: body.action });
   } catch { return unavailable(); }
 };

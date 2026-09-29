@@ -9,12 +9,12 @@ const draft = { kind: 'task', priority: 'urgent', title: '提交报名表', body
 function context(db: unknown, method: string, body: unknown, url = 'https://class.example/api/admin/notifications', authorized = true) {
   return { env: { ...env, DB: db }, data: authorized ? admin : {}, request: new Request(url, { method, body: method === 'GET' ? undefined : JSON.stringify(body) }) } as never;
 }
-function database(options: { notification?: Record<string, unknown> | null; members?: { email: string }[]; recipients?: Record<string, unknown>[] } = {}) {
+function database(options: { notification?: Record<string, unknown> | null; members?: { email: string }[]; recipients?: Record<string, unknown>[]; updateChanges?: number } = {}) {
   const batch = vi.fn(async (statements: unknown[]) => statements.map(() => ({ success: true })));
   const prepare = vi.fn((sql: string) => ({ bind: (...args: unknown[]) => ({
     first: async () => sql.includes('FROM notifications') ? options.notification ?? null : null,
     all: async () => ({ results: sql.includes('FROM class_members') ? options.members ?? [] : sql.includes('FROM notification_recipients') ? options.recipients ?? [] : [] }),
-    run: async () => ({ success: true, meta: { changes: 1 } }),
+    run: async () => ({ success: true, meta: { changes: options.updateChanges ?? (sql.includes("status='draft' AND EXISTS") && !options.members?.length ? 0 : 1) } }),
     sql, args
   }), all: async () => ({ results: options.members ?? [] }) }));
   return { prepare, batch };
@@ -36,11 +36,16 @@ describe('notification publishing', () => {
     expect((await onRequestPatch(context(db, 'PATCH', { id: 'n1', action: 'publish' }))).status).toBe(400);
     expect(db.batch).not.toHaveBeenCalled();
   });
-  it('publishes one recipient row per active member in a single D1 batch', async () => {
+  it('uses one guarded publish update so a trigger snapshots recipients exactly once', async () => {
     const db = database({ notification: { id: 'n1', status: 'draft' }, members: [{ email: 'a@stu.xjtu.edu.cn' }, { email: 'b@stu.xjtu.edu.cn' }] });
     expect((await onRequestPatch(context(db, 'PATCH', { id: 'n1', action: 'publish' }))).status).toBe(200);
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(db.batch.mock.calls[0][0]).toHaveLength(3);
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.prepare.mock.calls.some(([sql]) => sql.includes("status='draft' AND EXISTS"))).toBe(true);
+  });
+  it('reports a concurrent publish as a conflict without adding recipients', async () => {
+    const db = database({ notification: { id: 'n1', status: 'draft' }, members: [{ email: 'a@stu.xjtu.edu.cn' }], updateChanges: 0 });
+    expect((await onRequestPatch(context(db, 'PATCH', { id: 'n1', action: 'publish' }))).status).toBe(409);
+    expect(db.batch).not.toHaveBeenCalled();
   });
   it('rejects duplicate roster emails after normalizing case', async () => {
     const db = database();

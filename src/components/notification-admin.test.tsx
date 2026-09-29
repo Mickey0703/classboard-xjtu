@@ -54,3 +54,16 @@ it('reports a published notice separately from a failed homepage refresh', async
   expect(await screen.findByText(/已发布，但首页刷新失败/)).toBeTruthy();
   vi.unstubAllGlobals();
 });
+
+it('refreshes the shared public snapshot after withdrawal', async () => {
+  let row: Record<string, unknown> = { id: 'n3', kind: 'notice', priority: 'urgent', title: '撤回测试', body: '内容', due_at: null, pinned: 1, status: 'published' };
+  const onChanged = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') { row = { ...row, status: 'withdrawn' }; return { ok: true, json: async () => ({ id: 'n3', status: 'withdrawn' }) }; }
+    return { ok: true, json: async () => [row] };
+  }));
+  render(<NotificationAdmin onPublished={onChanged} />);
+  fireEvent.click(await screen.findByRole('button', { name: '撤回' }));
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  vi.unstubAllGlobals();
+});

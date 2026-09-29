@@ -5,12 +5,12 @@ import { onRequestGet as receipts, onRequestPost as changeReceipt } from './rece
 import { onRequestGet as login } from './login';
 
 const email = 'student@stu.xjtu.edu.cn';
-function fakeDb(options: { roster?: boolean; recipient?: boolean; status?: string; kind?: string } = {}) {
+function fakeDb(options: { roster?: boolean; recipient?: boolean; status?: string; kind?: string; updateChanges?: number } = {}) {
   const prepare = vi.fn((sql: string) => ({ bind: (...args: unknown[]) => ({
     first: async () => sql.includes('FROM class_members') ? (options.roster ? { email, display_name: '同学甲', active: 1 } : null) :
       sql.includes('FROM notifications') ? (options.recipient ? { id: 'n1', kind: options.kind ?? 'task', status: options.status ?? 'published', member_email: email } : null) : null,
     all: async () => ({ results: sql.includes('FROM notification_recipients') ? [{ notification_id: 'n1', acknowledged_at: null, completed_at: null }] : [] }),
-    run: async () => ({ success: true, meta: { changes: 1 } }), sql, args
+    run: async () => ({ success: true, meta: { changes: options.updateChanges ?? 1 } }), sql, args
   }) }));
   return { prepare };
 }
@@ -50,6 +50,12 @@ describe('member identity and receipts', () => {
   });
   it('does not complete an ordinary announcement', async () => {
     expect((await changeReceipt(ctx(fakeDb({ recipient: true, kind: 'notice' }), 'POST', { notificationId: 'n1', action: 'complete' })) as Response).status).toBe(400);
+  });
+  it('does not write a receipt if the notice is withdrawn after its initial read', async () => {
+    const db = fakeDb({ recipient: true, status: 'published', updateChanges: 0 });
+    const response = await changeReceipt(ctx(db, 'POST', { notificationId: 'n1', action: 'ack' }));
+    expect(response.status).toBe(409);
+    expect(db.prepare.mock.calls.some(([sql]) => sql.includes("status='published'"))).toBe(true);
   });
   it('sends the browser back to notifications after email login', async () => {
     const response = await login({ request: new Request('https://class.example/api/member/login') } as never);

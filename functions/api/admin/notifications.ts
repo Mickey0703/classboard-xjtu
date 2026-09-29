@@ -57,10 +57,11 @@ export const onRequestPatch: PagesFunction<AdminEnv, string, AdminData> = async 
     if (current.status !== 'draft') return Response.json({ error: '只能发布草稿' }, { status: 409 });
     const members = await context.env.DB.prepare('SELECT email FROM class_members WHERE active=1').all<{ email: string }>();
     if (!members.results?.length) return invalid('请先添加班级成员，再发布通知');
-    const statements = [context.env.DB.prepare('UPDATE notifications SET status=?, published_at=? WHERE id=? AND status=?').bind('published', nowShanghai(), body.id, 'draft'),
-      ...members.results.map(member => context.env.DB.prepare('INSERT INTO notification_recipients (notification_id, member_email) VALUES (?, ?)').bind(body.id, member.email))];
-    await context.env.DB.batch(statements);
-    return Response.json({ id: body.id, status: 'published', recipients: members.results.length });
+    // The trigger inserts the roster snapshot within this guarded UPDATE's transaction.
+    const result = await context.env.DB.prepare("UPDATE notifications SET status='published', published_at=? WHERE id=? AND status='draft' AND EXISTS (SELECT 1 FROM class_members WHERE active=1)")
+      .bind(nowShanghai(), body.id).run();
+    if (result.meta?.changes === 0) return Response.json({ error: '通知状态或成员名单已变化，请刷新后重试' }, { status: 409 });
+    return Response.json({ id: body.id, status: 'published' });
   } catch { return unavailable(); }
 };
 

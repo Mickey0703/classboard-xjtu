@@ -12,6 +12,7 @@ export default function App() {
   const [page, setPage] = useState<Page>(new URLSearchParams(window.location.search).get('view') === 'admin' ? 'admin' : new URLSearchParams(window.location.search).get('view') === 'notifications' ? 'notifications' : 'today');
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState('');
+  const [syncWarning, setSyncWarning] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const refresh = async () => {
     try { const data = await fetchSnapshot(); setSnapshot(data); setError(''); }
@@ -25,7 +26,17 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
+  useEffect(() => {
+    if (page === 'admin') return;
+    const sync = () => { void fetchSnapshot().then(data => { setSnapshot(data); setSyncWarning(false); }).catch(() => setSyncWarning(true)); };
+    if (page === 'notifications') sync();
+    const timer = window.setInterval(sync, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') sync(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [page]);
   return <Shell page={page} setPage={setPage} brandName={snapshot?.semester.className}>
+    {syncWarning && snapshot && page !== 'admin' && <div className="demo-banner" role="status">通知更新暂时失败，当前显示上次读取的内容。</div>}
     {page === 'admin' ? <Admin snapshot={snapshot} onSaved={refresh} onBack={() => setPage('today')}/> :
       error ? <div className="state-card"><h2>暂时无法读取班务信息</h2><p>{error}</p><button onClick={() => void refresh().catch(() => {})}>重新加载</button></div> :
       !snapshot ? <div className="state-card">正在读取班务信息…</div> :

@@ -69,3 +69,14 @@ it('keeps notifications available before the committee configures a semester', a
   vi.unstubAllGlobals();
   window.history.pushState({}, '', '/');
 });
+
+it('loads newly published notices when a student opens the notification tab', async () => {
+  let latest = { ...snapshot, notifications: [] as Snapshot['notifications'] };
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/api/snapshot') ? { ok: true, json: async () => latest } : { ok: false, status: 403 }));
+  render(<App />);
+  await screen.findByText('今天的安排');
+  latest = snapshot;
+  fireEvent.click(screen.getByRole('button', { name: '通知' }));
+  expect(await screen.findByText('校区调整')).toBeTruthy();
+  vi.unstubAllGlobals();
+});

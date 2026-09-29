@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import Today from './Today';
 import Timetable from './Timetable';
@@ -93,6 +93,7 @@ it('updates the displayed date when the tab becomes visible after midnight', asy
   expect(await screen.findByText('天气暂不可用')).toBeTruthy();
   vi.setSystemTime(new Date('2026-09-29T00:00:00Z'));
   fireEvent(document, new Event('visibilitychange'));
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
   expect(screen.getAllByText(/9月29日星期二/).length).toBeGreaterThan(0);
   vi.unstubAllGlobals();
   vi.useRealTimers();

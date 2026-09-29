@@ -4,7 +4,7 @@ test('committee publishes a task; a roster member confirms it; committee sees de
   const title = `班级待办（测试 ${Date.now()}）`;
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: '通知', exact: true }).click();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
   await expect(page.getByText('班级会议地点调整（演示）')).toBeVisible();
   await expect(page.getByText('使用班级邮箱登录')).toBeVisible();
   await page.screenshot({ path: 'test-results/notifications-mobile.png', fullPage: true });
@@ -41,6 +41,8 @@ test('committee publishes a task; a roster member confirms it; committee sees de
   await page.screenshot({ path: 'test-results/notification-stats-mobile.png', fullPage: true });
   await page.locator('.admin-notice-row').filter({ hasText: title }).getByRole('button', { name: '撤回' }).click();
   await expect(page.locator('.admin-notice-row').filter({ hasText: title }).getByText('已撤回')).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
+  await expect(page.getByText(title)).toHaveCount(0);
   const publicSnapshot = await (await request.get('/api/snapshot')).json() as { notifications: { title: string }[] };
   expect(publicSnapshot.notifications.some(item => item.title === title)).toBe(false);
 });
