@@ -23,6 +23,15 @@ it("shows today's course and clearly labels demo content", async () => {
   vi.unstubAllGlobals();
 });
 
+it('shows the date when the next class is on a later day', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+  const withTomorrow = { ...snapshot, courses: [{ ...snapshot.courses[0], weekday: 2 }] };
+  render(<Today snapshot={withTomorrow} now={new Date('2026-09-28T03:00:00Z')} onNavigate={vi.fn()} />);
+  expect(screen.getByText(/9月29日 08:00 开始/)).toBeTruthy();
+  expect(await screen.findByText('天气暂不可用')).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
 it('switches teaching weeks in the timetable', () => {
   render(<Timetable snapshot={snapshot} now={new Date('2026-09-28T00:00:00Z')} />);
   expect(screen.getByText(/第 1 周/)).toBeTruthy();
