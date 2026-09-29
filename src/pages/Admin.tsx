@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, LockKeyhole, Plus, Trash2 } from 'lucide-react';
 import { saveAdmin } from '../api/client';
 import type { Course, EventItem, Semester, Snapshot, WeekType } from '../domain/types';
+import NotificationAdmin from '../components/NotificationAdmin';
+import MembersAdmin from '../components/MembersAdmin';
 
-type Tab = 'courses' | 'events' | 'semester';
+type Tab = 'courses' | 'events' | 'semester' | 'notifications' | 'members';
 const blankCourse: Course = { id: '', title: '', teacher: '', location: '', weekday: 1, startPeriod: 1, endPeriod: 2, startWeek: 1, endWeek: 16, weekType: 'all' };
 const blankEvent: EventItem = { id: '', title: '', description: '', category: '班级', startAt: '', dueAt: '', done: false };
 
 export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapshot | null; onSaved: () => Promise<void> | void; onBack: () => void }) {
   const [email, setEmail] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [tab, setTab] = useState<Tab>('courses');
+  const [tab, setTab] = useState<Tab>('notifications');
   const [course, setCourse] = useState<Course>(blankCourse);
   const [event, setEvent] = useState<EventItem>(blankEvent);
   const [semester, setSemester] = useState<Semester>(snapshot?.semester ?? { title: '', startDate: '', endDate: '', periods: [] });
@@ -19,7 +21,7 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
   const [success, setSuccess] = useState('');
   useEffect(() => { fetch('/api/admin/session', { credentials: 'include' }).then(async r => { if (!r.ok) throw Error('not signed in'); const body = await r.json() as { email: string }; setEmail(body.email); }).catch(() => setEmail(null)).finally(() => setChecking(false)); }, []);
   useEffect(() => { if (snapshot?.semester) { setSemester(snapshot.semester); setPeriodText(snapshot.semester.periods.map(p => `${p.number},${p.start},${p.end}`).join('\n')); } }, [snapshot]);
-  const action = async (path: Tab, method: 'POST'|'PUT'|'DELETE', body: unknown, label: string) => {
+  const action = async (path: 'courses' | 'events' | 'semester', method: 'POST'|'PUT'|'DELETE', body: unknown, label: string) => {
     setError(''); setSuccess('');
     try { await saveAdmin(path, method, body); }
     catch (cause) { setError(cause instanceof Error ? cause.message : '保存失败'); return; }
@@ -29,11 +31,13 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
     if (path === 'courses' && method !== 'DELETE') setCourse(blankCourse);
     if (path === 'events' && method !== 'DELETE') setEvent(blankEvent);
   };
-  return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS MANAGEMENT</span><h1>班委管理</h1><p>维护全班共享的课表与日程</p></div><LockKeyhole className="title-illustration" size={52}/></div><button className="text-action" onClick={onBack}><ArrowLeft size={16}/> 返回首页</button>
+  return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS MANAGEMENT</span><h1>班委管理</h1><p>发布通知，维护成员、课表与日程</p></div><LockKeyhole className="title-illustration" size={52}/></div><button className="text-action" onClick={onBack}><ArrowLeft size={16}/> 返回首页</button>
     {checking ? <div className="state-card">正在检查班委登录状态…</div> : !email ? <div className="state-card"><h2>班委登录</h2><p>只有班委邮箱通过验证后才能修改班务资料。</p><a className="primary-button" href="/api/admin/login">使用班委邮箱登录</a></div> : <>
       <div className="demo-banner">当前班委：{email} · 修改会同步显示给所有访问者</div>
-      <div className="admin-tabs">{(['courses','events','semester'] as const).map((value,i) => <button key={value} className={tab === value ? 'selected' : ''} onClick={() => { setTab(value); setError(''); setSuccess(''); }}>{['课程','日程','学期'][i]}</button>)}</div>
+      <div className="admin-tabs">{(['notifications','members','courses','events','semester'] as const).map((value,i) => <button key={value} className={tab === value ? 'selected' : ''} onClick={() => { setTab(value); setError(''); setSuccess(''); }}>{['通知','成员','课程','日程','学期'][i]}</button>)}</div>
       <section className="card admin-card">
+        {tab === 'notifications' && <NotificationAdmin onPublished={onSaved}/>}
+        {tab === 'members' && <MembersAdmin/>}
         {tab === 'courses' && <><div className="section-head"><h2>{course.id ? '编辑课程' : '添加课程'}</h2><Plus size={18}/></div><form onSubmit={e => { e.preventDefault(); void action('courses', course.id ? 'PUT' : 'POST', course, '保存课程'); }}><div className="form-grid">
           <label className="field wide">课程名称<input value={course.title} onChange={e => setCourse({ ...course, title: e.target.value })} required maxLength={100}/></label>
           <label className="field">任课教师<input value={course.teacher} onChange={e => setCourse({ ...course, teacher: e.target.value })}/></label><label className="field">上课地点<input value={course.location} onChange={e => setCourse({ ...course, location: e.target.value })}/></label>

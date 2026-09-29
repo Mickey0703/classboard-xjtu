@@ -8,7 +8,7 @@ const realDate = (value: unknown): value is string => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 };
 const realTime = (value: unknown): value is string => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
-const shanghaiTimestamp = (value: unknown): value is string => {
+export const shanghaiTimestamp = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
   const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):(\d{2})\+08:00$/);
   return Boolean(match && realDate(match[1]) && realTime(match[2]) && Number(match[3]) < 60);

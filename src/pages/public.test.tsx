@@ -11,6 +11,7 @@ const snapshot: Snapshot = {
   semester: { title: '秋季', startDate: '2026-09-28', endDate: '2026-10-18', periods: [{ number: 1, start: '08:00', end: '08:45' }] },
   courses: [{ id: 'c', title: '高等数学（演示）', teacher: '张老师', location: 'A101', weekday: 1, startPeriod: 1, endPeriod: 1, startWeek: 1, endWeek: 3, weekType: 'all' }],
   events: [{ id: 'e', title: '班会（演示）', description: '教室集合', category: '班级', startAt: '2026-09-29T18:00:00+08:00', dueAt: '2026-09-29T19:00:00+08:00', done: false }]
+  ,notifications: []
 };
 
 it("shows today's course and clearly labels demo content", async () => {

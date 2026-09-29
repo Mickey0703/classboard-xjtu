@@ -1,10 +1,11 @@
-import { CalendarDays, ClipboardList, GraduationCap, Home, LockKeyhole } from 'lucide-react';
+import { Bell, CalendarDays, ClipboardList, GraduationCap, Home, LockKeyhole } from 'lucide-react';
 
-export type Page = 'today' | 'timetable' | 'schedule' | 'admin';
+export type Page = 'today' | 'timetable' | 'schedule' | 'notifications' | 'admin';
 const tabs: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'today', label: '今日', icon: Home },
   { id: 'timetable', label: '课表', icon: CalendarDays },
-  { id: 'schedule', label: '日程', icon: ClipboardList }
+  { id: 'schedule', label: '日程', icon: ClipboardList },
+  { id: 'notifications', label: '通知', icon: Bell }
 ];
 
 export default function Shell({ page, setPage, brandName, children }: { page: Page; setPage: (p: Page) => void; brandName?: string; children: React.ReactNode }) {

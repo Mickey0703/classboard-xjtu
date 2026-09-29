@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, CloudSun, MapPin, Sparkles } from 'lucide-react';
+import { ArrowRight, Bell, CalendarDays, CheckCircle2, Clock3, CloudSun, MapPin, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getCoursesForDate, getEventStatus, getNextClass, getTeachingWeek, localDate } from '../domain/calendar';
 import type { Snapshot } from '../domain/types';
@@ -17,10 +17,12 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
   const nextWhen = next ? `${next.date === today ? '今天' : shortDateFmt.format(next.startAt)} ${timeFmt.format(next.startAt)}` : '';
   const week = getTeachingWeek(today, snapshot.semester);
   const events = snapshot.events.filter(e => !e.done).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  const important = [...snapshot.notifications].filter(n => n.priority !== 'normal').sort((a,b) => Number(b.pinned) - Number(a.pinned) || (b.priority === 'urgent' ? 2 : 1) - (a.priority === 'urgent' ? 2 : 1) || b.publishedAt.localeCompare(a.publishedAt))[0];
   const near = events.filter(e => Date.parse(e.dueAt) >= now.getTime()).slice(0, 3);
   return <div className="page-stack">
     <section className="welcome"><div><span className="eyebrow">CLASSBOARD · XJTU</span><h1>今天的安排</h1><p>{dayFmt.format(now)} · {week > 0 ? `第 ${week} 周` : '学期未开始'}</p></div><div className="welcome-number"><strong>{classes.length}</strong><span>今日课程</span></div></section>
     {snapshot.demo && <div className="demo-banner"><Sparkles size={16}/> 当前展示演示数据；班委录入课表和事项后将同步更新。</div>}
+    {important && <section className="home-notice"><div><span className="home-notice-label"><Bell size={14}/> {important.priority === 'urgent' ? '紧急通知' : '重要通知'}</span><h2>{important.title}</h2><p>{important.body}</p></div><button onClick={() => onNavigate('notifications')}>查看通知 <ArrowRight size={16}/></button></section>}
     <div className="summary-strip"><div><CalendarDays size={18}/><span>今天 <strong>{classes.length}</strong> 节课</span></div><div><CheckCircle2 size={18}/><span>待完成 <strong>{events.length}</strong> 件事</span></div><div><Clock3 size={18}/><span>{next ? `下一节 ${nextWhen}` : '暂无后续课程'}</span></div></div>
     <div className="dashboard-grid">
       <div className="column-stack">

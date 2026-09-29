@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "wrangler pages dev dist --port 8788 --ip 127.0.0.1",
-    "preview:e2e": "wrangler pages dev dist --port 8788 --ip 127.0.0.1 --binding LOCAL_DEV_MODE=true --binding LOCAL_DEV_ADMIN_EMAIL=monitor@stu.xjtu.edu.cn --binding LOCAL_DEV_TOKEN=test-token --binding ADMIN_EMAILS=monitor@stu.xjtu.edu.cn",
+    "preview:e2e": "wrangler pages dev dist --port 8788 --ip 127.0.0.1 --binding LOCAL_DEV_MODE=true --binding LOCAL_DEV_ADMIN_EMAIL=monitor@stu.xjtu.edu.cn --binding LOCAL_DEV_TOKEN=test-token --binding LOCAL_DEV_MEMBER_EMAIL=student@example.com --binding LOCAL_DEV_MEMBER_TOKEN=member-test --binding ADMIN_EMAILS=monitor@stu.xjtu.edu.cn",
     "db:init": "wrangler d1 execute DB --local --file=db/schema.sql",
     "db:demo": "wrangler d1 execute DB --local --file=db/demo.sql",
+    "db:notifications": "wrangler d1 execute DB --local --file=db/migrations/002_notifications.sql",
+    "db:notification-demo": "wrangler d1 execute DB --local --file=db/demo-notifications.sql",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },

@@ -28,11 +28,13 @@ test('the local admin can save a course and visitors cannot write without a vali
   await page.goto('/');
   await page.getByRole('button', { name: '班委管理' }).click();
   await expect(page.getByText(/monitor@stu.xjtu.edu.cn/)).toBeVisible();
+  await page.getByRole('button', { name: '课程', exact: true }).click();
   await page.getByLabel('课程名称').fill(courseName);
   await page.getByRole('button', { name: '保存课程' }).click();
   await expect(page.getByText('保存课程成功')).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: '班委管理' }).click();
+  await page.getByRole('button', { name: '课程', exact: true }).click();
   await expect(page.getByText(courseName)).toBeVisible();
   const snapshot = await (await request.get('/api/snapshot')).json() as { courses: { id: string; title: string }[] };
   const created = snapshot.courses.find(item => item.title === courseName);
