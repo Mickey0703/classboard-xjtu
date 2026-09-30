@@ -1,46 +1,39 @@
 import { expect, test } from '@playwright/test';
 
-test('public pages work on phone and course week changes', async ({ page, request }) => {
+test('public mobile navigation focuses on today, schedule and notifications', async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await expect(page.getByText('西交班务').first()).toBeVisible();
-  await expect(page.getByText(/演示数据/).first()).toBeVisible();
+  await expect(page.getByText('ID 2601 班务').first()).toBeVisible();
   await expect(page.getByRole('link', { name: '查看 ID 2601 完整班徽' })).toHaveAttribute('href', '/class-emblem.png');
   expect((await request.get('/class-emblem.png')).status()).toBe(200);
+  const nav = page.getByRole('navigation', { name: '主导航' });
+  await expect(nav.getByRole('button')).toHaveCount(3);
+  await expect(nav.getByRole('button', { name: '课表' })).toHaveCount(0);
+  await expect(page.getByText(/下一节|今日时间轴/)).toHaveCount(0);
   await page.screenshot({ path: 'test-results/home-mobile.png', fullPage: true });
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '课表', exact: true }).click();
-  const currentLabel = await page.getByText(/第 \d+ 周/).first().textContent();
-  const currentWeek = Number(currentLabel?.match(/第 (\d+) 周/)?.[1]);
-  expect(currentWeek).toBeGreaterThan(0);
-  await page.getByRole('button', { name: '下周' }).click();
-  await expect(page.getByText(`第 ${currentWeek + 1} 周`).first()).toBeVisible();
-  await page.getByRole('button', { name: '日程', exact: true }).click();
+  await nav.getByRole('button', { name: '日程' }).click();
   await expect(page.getByRole('heading', { name: '班级日程' })).toBeVisible();
+  await nav.getByRole('button', { name: '通知' }).click();
+  await expect(page.getByRole('heading', { name: '班级通知' })).toBeVisible();
 });
 
-test('the local admin can save a course and visitors cannot write without a valid session', async ({ page, request }) => {
-  const courseName = `线性代数（测试 ${Date.now()}）`;
-  const bad = await request.post('/api/admin/courses', { data: { title: '恶意写入' }, headers: { Origin: 'https://another.example' } });
-  expect(bad.status()).toBe(403);
-  expect((await request.get('/api/admin/session')).status()).toBe(403);
+test('the committee can save a class matter while visitors cannot write', async ({ page, request }) => {
+  const title = `班级事项（测试 ${Date.now()}）`;
+  expect((await request.post('/api/admin/events', { data: { title } })).status()).toBe(403);
   await page.context().addCookies([{ name: 'local_admin', value: 'test-token', domain: '127.0.0.1', path: '/' }]);
-  await page.goto('/');
-  await page.getByRole('button', { name: '班委管理' }).click();
+  await page.goto('/?view=admin');
   await expect(page.getByText(/monitor@stu.xjtu.edu.cn/)).toBeVisible();
-  await page.getByRole('button', { name: '课程', exact: true }).click();
-  await page.getByLabel('课程名称').fill(courseName);
-  await page.getByRole('button', { name: '保存课程' }).click();
-  await expect(page.getByText('保存课程成功')).toBeVisible();
+  await page.getByRole('main').getByRole('button', { name: '日程', exact: true }).click();
+  await page.getByLabel('事项标题').fill(title);
+  await page.getByLabel('开始时间').fill('2026-09-29T18:00');
+  await page.getByLabel('截止时间', { exact: true }).fill('2026-09-29T19:00');
+  await page.getByRole('button', { name: '保存事项' }).click();
+  await expect(page.getByText('保存事项成功')).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: '班委管理' }).click();
-  await page.getByRole('button', { name: '课程', exact: true }).click();
-  await expect(page.getByText(courseName)).toBeVisible();
-  const snapshot = await (await request.get('/api/snapshot')).json() as { courses: { id: string; title: string }[] };
-  const created = snapshot.courses.find(item => item.title === courseName);
+  await page.getByRole('main').getByRole('button', { name: '日程', exact: true }).click();
+  await expect(page.getByText(title)).toBeVisible();
+  const snapshot = await (await request.get('/api/snapshot')).json() as { events: { id: string; title: string }[] };
+  const created = snapshot.events.find(item => item.title === title);
   expect(created).toBeTruthy();
-  const removed = await page.request.delete('/api/admin/courses', { data: { id: created!.id } });
-  expect(removed.status()).toBe(200);
+  expect((await page.request.delete('/api/admin/events', { data: { id: created!.id } })).status()).toBe(200);
 });

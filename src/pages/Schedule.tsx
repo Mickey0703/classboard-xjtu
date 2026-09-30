@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CalendarClock, CheckCircle2, Clock3 } from 'lucide-react';
-import { getEventStatus } from '../domain/calendar';
+import { getEventStatus } from '../domain/events';
 import type { Snapshot } from '../domain/types';
 
 const categories = ['全部', '学习', '班级', '活动'];

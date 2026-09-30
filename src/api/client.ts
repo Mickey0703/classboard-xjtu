@@ -6,7 +6,7 @@ export async function fetchSnapshot(): Promise<Snapshot> {
   return response.json() as Promise<Snapshot>;
 }
 
-export async function saveAdmin(path: 'courses' | 'events' | 'semester', method: 'POST' | 'PUT' | 'DELETE', body: unknown): Promise<void> {
+export async function saveAdmin(path: 'events' | 'site-settings', method: 'POST' | 'PUT' | 'DELETE', body: unknown): Promise<void> {
   const response = await fetch(`/api/admin/${path}`, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) {
     const result = await response.json().catch(() => ({})) as { error?: string };

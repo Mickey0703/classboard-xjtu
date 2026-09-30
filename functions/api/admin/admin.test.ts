@@ -1,57 +1,40 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isAdminEmail, requireAdmin } from './auth';
-import { onRequestPost as createCourse, onRequestPut as updateCourse } from './courses';
 import { onRequestPost as createEvent } from './events';
-import { onRequestPut as saveSemester } from './semester';
-import { validEvent, validSemester } from './validate';
+import { onRequestPut as saveSiteSettings } from './site-settings';
+import { validEvent } from './validate';
 import { onRequest as middleware } from './_middleware';
 import { webcrypto } from 'node:crypto';
 
-const statement = { bind: vi.fn(() => ({ run: vi.fn(async () => ({ success: true })), first: vi.fn(async () => ({ value: JSON.stringify({ title: '秋季', startDate: '2026-09-01', endDate: '2027-01-01', periods: [{ number: 1, start: '08:00', end: '08:45' }, { number: 2, start: '08:55', end: '09:40' }] }) })) })) };
+const statement = { bind: vi.fn(() => ({ run: vi.fn(async () => ({ success: true, meta: { changes: 1 } })) })) };
 const db = { prepare: vi.fn(() => statement) };
 const env = { DB: db, ADMIN_EMAILS: 'monitor@stu.xjtu.edu.cn' };
-const course = { title: '高等数学', teacher: '张老师', location: 'A101', weekday: 1, startPeriod: 1, endPeriod: 2, startWeek: 1, endWeek: 16, weekType: 'all' };
-function context(body: unknown, email?: string) {
-  return { env, request: new Request('https://example.com/api/admin/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), data: email ? { cloudflareAccess: { JWT: { payload: { email } } } } : {} } as never;
+const event = { title: '班会', description: '', category: '班级', startAt: '2026-09-29T18:00:00+08:00', dueAt: '2026-09-29T19:00:00+08:00', done: false };
+function context(body: unknown, email?: string, path = 'events', method = 'POST') {
+  return { env, request: new Request(`https://example.com/api/admin/${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), data: email ? { cloudflareAccess: { JWT: { payload: { email } } } } : {} } as never;
 }
 
 describe('admin protection', () => {
   it('denies missing and non-allowlisted identities', () => {
     expect(isAdminEmail(undefined, env.ADMIN_EMAILS)).toBe(false);
     expect(isAdminEmail('other@example.com', env.ADMIN_EMAILS)).toBe(false);
-    expect(requireAdmin(context(course))).toBe(false);
+    expect(requireAdmin(context(event))).toBe(false);
   });
   it('permits an allowlisted email regardless of case', () => {
     expect(isAdminEmail('MONITOR@stu.xjtu.edu.cn', env.ADMIN_EMAILS)).toBe(true);
   });
   it('rejects writes without a verified admin context', async () => {
-    expect((await createCourse(context(course))).status).toBe(403);
+    expect((await createEvent(context(event))).status).toBe(403);
     expect(db.prepare).not.toHaveBeenCalled();
   });
-  it('rejects invalid course and event fields', async () => {
-    expect((await createCourse(context({ ...course, weekday: 9 }, 'monitor@stu.xjtu.edu.cn'))).status).toBe(400);
-    expect((await createEvent(context({ title: '作业', startAt: 'bad', dueAt: 'bad' }, 'monitor@stu.xjtu.edu.cn'))).status).toBe(400);
+  it('rejects invalid event fields and accepts a valid class matter', async () => {
+    expect((await createEvent(context({ ...event, dueAt: 'bad' }, 'monitor@stu.xjtu.edu.cn'))).status).toBe(400);
+    expect((await createEvent(context(event, 'monitor@stu.xjtu.edu.cn'))).status).toBe(200);
   });
-  it('saves a valid course and requires an id for updates', async () => {
-    expect((await createCourse(context(course, 'monitor@stu.xjtu.edu.cn'))).status).toBe(200);
-    expect(db.prepare).toHaveBeenCalled();
-    expect((await updateCourse(context(course, 'monitor@stu.xjtu.edu.cn'))).status).toBe(400);
-  });
-  it('rejects a course that refers to an undefined class period', async () => {
-    expect((await createCourse(context({ ...course, startPeriod: 9, endPeriod: 9 }, 'monitor@stu.xjtu.edu.cn'))).status).toBe(400);
-  });
-  it('does not remove a period still used by an existing course', async () => {
-    const localDb = { prepare: vi.fn(() => ({ all: async () => ({ results: [{ start_period: 1, end_period: 2 }] }), bind: () => ({ run: async () => ({ success: true }) }) })) };
-    const value = { title: '秋季', startDate: '2026-09-01', endDate: '2027-01-01', periods: [{ number: 1, start: '08:00', end: '08:45' }] };
-    const request = new Request('https://class.example/api/admin/semester', { method: 'PUT', body: JSON.stringify(value) });
-    const response = await saveSemester({ env: { ...env, DB: localDb }, request, data: { cloudflareAccess: { JWT: { payload: { email: 'monitor@stu.xjtu.edu.cn' } } } } } as never);
-    expect(response.status).toBe(400);
-  });
-  it('rejects impossible semester dates, times and duplicate periods', () => {
-    const base = { title: '秋季', startDate: '2026-09-01', endDate: '2027-01-01', periods: [{ number: 1, start: '08:00', end: '08:45' }] };
-    expect(validSemester({ ...base, startDate: '2026-99-01' })).toBe(false);
-    expect(validSemester({ ...base, periods: [{ number: 1, start: '25:00', end: '26:00' }] })).toBe(false);
-    expect(validSemester({ ...base, periods: [...base.periods, { number: 1, start: '09:00', end: '09:45' }] })).toBe(false);
+  it('protects and validates changes to the public class name', async () => {
+    expect((await saveSiteSettings(context({ className: '新班名' }, undefined, 'site-settings', 'PUT'))).status).toBe(403);
+    expect((await saveSiteSettings(context({ className: '' }, 'monitor@stu.xjtu.edu.cn', 'site-settings', 'PUT'))).status).toBe(400);
+    expect((await saveSiteSettings(context({ className: '工业设计 2601 班' }, 'monitor@stu.xjtu.edu.cn', 'site-settings', 'PUT'))).status).toBe(200);
   });
   it('requires event timestamps to have valid Shanghai dates and offsets', () => {
     const event = { title: '班会', description: '', category: '班级', startAt: '2026-09-28T18:00:00+08:00', dueAt: '2026-09-28T19:00:00+08:00', done: false };

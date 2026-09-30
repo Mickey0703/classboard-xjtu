@@ -6,9 +6,8 @@ import App from '../App';
 import type { Snapshot } from '../domain/types';
 
 const snapshot: Snapshot = {
-  demo: true,
-  semester: { title: '秋季', startDate: '2026-09-07', endDate: '2027-01-10', periods: [{ number: 1, start: '08:00', end: '08:45' }] },
-  courses: [], events: [], notifications: [
+  className: 'ID 2601 班务', demo: true,
+  events: [], notifications: [
     { id: 'notice', kind: 'notice', priority: 'urgent', title: '校区调整', body: '明日起在创新港上课。', dueAt: null, pinned: true, publishedAt: '2026-09-29T10:00:00+08:00' },
     { id: 'task', kind: 'task', priority: 'important', title: '提交报名表', body: '周五前提交。', dueAt: '2026-10-02T18:00:00+08:00', pinned: false, publishedAt: '2026-09-29T09:00:00+08:00' }
   ]
@@ -17,7 +16,7 @@ const snapshot: Snapshot = {
 it('lets visitors read notices but asks them to sign in before confirming', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 })));
   render(<Notifications snapshot={snapshot} now={new Date('2026-09-29T03:00:00Z')} />);
-  expect(screen.getByText('校区调整')).toBeTruthy();
+  expect(screen.getByRole('heading', { name: '校区调整' })).toBeTruthy();
   expect(screen.getByText('提交报名表')).toBeTruthy();
   expect(await screen.findByText(/使用班级邮箱登录/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: '确认已知悉' })).toBeNull();
@@ -42,7 +41,7 @@ it('shows the current student’s acknowledgement after a successful save', asyn
 it('promotes an urgent published notice on the homepage', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
   render(<Today snapshot={snapshot} now={new Date('2026-09-29T03:00:00Z')} onNavigate={vi.fn()} />);
-  expect(screen.getByText('校区调整')).toBeTruthy();
+  expect(screen.getByRole('heading', { name: '校区调整' })).toBeTruthy();
   expect(await screen.findByText('天气暂不可用')).toBeTruthy();
   vi.unstubAllGlobals();
 });
@@ -54,16 +53,15 @@ it('keeps urgent notices ahead of newer important notices on the homepage', asyn
     { ...snapshot.notifications[1], title: '较新的重要通知', kind: 'notice' as const, dueAt: null, publishedAt: '2026-09-29T12:00:00+08:00' }
   ] };
   render(<Today snapshot={two} now={new Date('2026-09-29T03:00:00Z')} onNavigate={vi.fn()} />);
-  expect(screen.getByText('校区调整')).toBeTruthy();
-  expect(screen.queryByText('较新的重要通知')).toBeNull();
+  expect(screen.getByRole('heading', { name: '校区调整' })).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: '较新的重要通知' })).toBeNull();
   expect(await screen.findByText('天气暂不可用')).toBeTruthy();
   vi.unstubAllGlobals();
 });
 
-it('keeps notifications available before the committee configures a semester', async () => {
+it('keeps notifications available without course or semester settings', async () => {
   window.history.pushState({}, '', '/?view=notifications');
-  const noSemester = { ...snapshot, semester: { title: '', startDate: '', endDate: '', periods: [] } };
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/api/snapshot') ? { ok: true, json: async () => noSemester } : { ok: false, status: 403 }));
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/api/snapshot') ? { ok: true, json: async () => snapshot } : { ok: false, status: 403 }));
   render(<App />);
   expect(await screen.findByText('校区调整')).toBeTruthy();
   vi.unstubAllGlobals();
@@ -74,7 +72,7 @@ it('loads newly published notices when a student opens the notification tab', as
   let latest = { ...snapshot, notifications: [] as Snapshot['notifications'] };
   vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/api/snapshot') ? { ok: true, json: async () => latest } : { ok: false, status: 403 }));
   render(<App />);
-  await screen.findByText('今天的安排');
+  await screen.findByText('今天的班务');
   latest = snapshot;
   fireEvent.click(screen.getByRole('button', { name: '通知' }));
   expect(await screen.findByText('校区调整')).toBeTruthy();

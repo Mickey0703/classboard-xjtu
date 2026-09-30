@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import Admin from './Admin';
 import type { Snapshot } from '../domain/types';
 
-const snapshot: Snapshot = { demo: true, semester: { title: '秋季', startDate: '2026-09-07', endDate: '2027-01-10', periods: [{ number: 1, start: '08:00', end: '08:45' }] }, courses: [], events: [], notifications: [] };
+const snapshot: Snapshot = { className: 'ID 2601 班务', demo: true, events: [], notifications: [] };
 
 it('shows a sign-in prompt when admin session is unavailable', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 })));
@@ -12,37 +12,33 @@ it('shows a sign-in prompt when admin session is unavailable', async () => {
   vi.unstubAllGlobals();
 });
 
-it('preserves entered course data after save fails', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/session') ? { ok: true, json: async () => ({ email: 'monitor@stu.xjtu.edu.cn' }) } : { ok: false, json: async () => ({ error: '保存失败' }) }));
+it('keeps entered event details after a failed save', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/session') ? { ok: true, json: async () => ({ email: 'monitor@stu.xjtu.edu.cn' }) } : url.endsWith('/notifications') ? { ok: true, json: async () => [] } : { ok: false, json: async () => ({ error: '保存失败' }) }));
   render(<Admin snapshot={snapshot} onSaved={vi.fn()} onBack={vi.fn()} />);
   await screen.findByText(/monitor@stu.xjtu.edu.cn/);
-  fireEvent.click(screen.getByRole('button', { name: '课程' }));
-  fireEvent.change(screen.getByLabelText('课程名称'), { target: { value: '高等数学' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存课程' }));
+  fireEvent.click(screen.getByRole('button', { name: '日程' }));
+  fireEvent.change(screen.getByLabelText('事项标题'), { target: { value: '班会' } });
+  fireEvent.change(screen.getByLabelText('开始时间'), { target: { value: '2026-09-29T18:00' } });
+  fireEvent.change(screen.getByLabelText('截止时间'), { target: { value: '2026-09-29T19:00' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存事项' }));
   await waitFor(() => expect(screen.getByText('保存失败')).toBeTruthy());
-  expect((screen.getByLabelText('课程名称') as HTMLInputElement).value).toBe('高等数学');
+  expect((screen.getByLabelText('事项标题') as HTMLInputElement).value).toBe('班会');
   vi.unstubAllGlobals();
 });
 
-it('keeps a newline while the committee types another class period', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/session') ? { email: 'monitor@stu.xjtu.edu.cn' } : [] })));
+it('lets the committee update the class display name without semester settings', async () => {
+  const calls: { url: string; method?: string }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, method: init?.method });
+    if (url.endsWith('/session')) return { ok: true, json: async () => ({ email: 'monitor@stu.xjtu.edu.cn' }) };
+    if (url.endsWith('/notifications')) return { ok: true, json: async () => [] };
+    return { ok: true, json: async () => ({}) };
+  }));
   render(<Admin snapshot={snapshot} onSaved={vi.fn()} onBack={vi.fn()} />);
   await screen.findByText(/monitor@stu.xjtu.edu.cn/);
-  fireEvent.click(screen.getByRole('button', { name: '学期' }));
-  const field = screen.getByLabelText(/节次时间/) as HTMLTextAreaElement;
-  fireEvent.change(field, { target: { value: '1,08:00,08:45\n' } });
-  expect(field.value).toBe('1,08:00,08:45\n');
-  vi.unstubAllGlobals();
-});
-
-it('reports a saved change whose shared-data refresh failed without clearing the form', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => url.endsWith('/session') ? { ok: true, json: async () => ({ email: 'monitor@stu.xjtu.edu.cn' }) } : url.endsWith('/notifications') && !init?.method ? { ok: true, json: async () => [] } : { ok: true, json: async () => ({}) }));
-  render(<Admin snapshot={snapshot} onSaved={vi.fn(async () => { throw Error('offline'); })} onBack={vi.fn()} />);
-  await screen.findByText(/monitor@stu.xjtu.edu.cn/);
-  fireEvent.click(screen.getByRole('button', { name: '课程' }));
-  fireEvent.change(screen.getByLabelText('课程名称'), { target: { value: '高等数学' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存课程' }));
-  expect(await screen.findByText(/已保存，但刷新失败/)).toBeTruthy();
-  expect((screen.getByLabelText('课程名称') as HTMLInputElement).value).toBe('高等数学');
+  fireEvent.click(screen.getByRole('button', { name: '网站设置' }));
+  fireEvent.change(screen.getByLabelText('班级名称'), { target: { value: '工业设计 2601 班' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存班级名称' }));
+  await waitFor(() => expect(calls.some(call => call.url.endsWith('/api/admin/site-settings') && call.method === 'PUT')).toBe(true));
   vi.unstubAllGlobals();
 });

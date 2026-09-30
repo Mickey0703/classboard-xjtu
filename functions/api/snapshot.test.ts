@@ -5,40 +5,29 @@ function db(rows: Record<string, Record<string, unknown>[]>) {
   return { prepare: (sql: string) => ({ bind: () => ({ all: async () => ({ results: rows[sql] ?? [] }) }), all: async () => ({ results: rows[sql] ?? [] }) }) };
 }
 
-it('returns public semester, courses and events without admin fields', async () => {
+it('returns class branding, events and published notices without course or private fields', async () => {
   const database = db({
-    'SELECT key, value FROM settings': [{ key: 'semester', value: JSON.stringify({ title: '秋季', startDate: '2026-09-01', endDate: '2027-01-01', periods: [] }), adminSecret: 'private' }, { key: 'demo', value: 'true' }],
-    'SELECT * FROM courses ORDER BY weekday, start_period': [{ id: '1', title: '高数', teacher: '张', location: 'A1', weekday: 1, start_period: 1, end_period: 2, start_week: 1, end_week: 16, week_type: 'all' }],
-    'SELECT * FROM events ORDER BY due_at': [{ id: 'e', title: '班会', description: '', category: '班级', start_at: '2026-09-01T10:00:00+08:00', due_at: '2026-09-01T11:00:00+08:00', done: 0 }]
+    'SELECT key, value FROM settings': [{ key: 'className', value: 'ID 2601 班务' }, { key: 'demo', value: 'true' }, { key: 'semester', value: 'legacy' }],
+    'SELECT * FROM events ORDER BY due_at': [{ id: 'e', title: '班会', description: '', category: '班级', start_at: '2026-09-29T18:00:00+08:00', due_at: '2026-09-29T19:00:00+08:00', done: 0 }],
+    'SELECT * FROM notifications WHERE status = ? ORDER BY pinned DESC, published_at DESC': [{ id: 'n', kind: 'notice', priority: 'urgent', title: '通知', body: '请查看', due_at: null, pinned: 1, published_at: '2026-09-29T10:00:00+08:00', author_email: 'private@example.com' }]
   });
   const response = await onRequestGet({ env: { DB: database }, request: new Request('https://example.com/api/snapshot') } as never);
   const body = await response.json() as Record<string, unknown>;
   expect(response.status).toBe(200);
   expect(response.headers.get('Cache-Control')).toBe('no-store');
-  expect(body).toMatchObject({ courses: [{ title: '高数' }], events: [{ title: '班会' }], demo: true });
-  expect(JSON.stringify(body)).not.toContain('adminSecret');
+  expect(body).toMatchObject({ className: 'ID 2601 班务', events: [{ title: '班会' }], notifications: [{ title: '通知' }], demo: true });
+  expect(body).not.toHaveProperty('courses');
+  expect(body).not.toHaveProperty('semester');
+  expect(JSON.stringify(body)).not.toContain('author_email');
 });
 
-it('returns an empty snapshot when the database has no rows', async () => {
+it('uses a default class name and empty lists for an unconfigured database', async () => {
   const response = await onRequestGet({ env: { DB: db({}) }, request: new Request('https://example.com/api/snapshot') } as never);
-  expect(response.status).toBe(200);
-  expect((await response.json() as { courses: unknown[] }).courses).toEqual([]);
-  await expect((await onRequestGet({ env: { DB: db({}) }, request: new Request('https://example.com/api/snapshot') } as never)).json()).resolves.toMatchObject({ demo: false });
+  expect(await response.json()).toMatchObject({ className: '西交班务', events: [], notifications: [], demo: false });
 });
 
 it('returns 503 on database errors', async () => {
   const broken = { prepare: vi.fn(() => { throw Error('db down'); }) };
   const response = await onRequestGet({ env: { DB: broken }, request: new Request('https://example.com/api/snapshot') } as never);
   expect(response.status).toBe(503);
-});
-
-it('returns only public fields of published notifications', async () => {
-  const database = db({
-    'SELECT * FROM notifications WHERE status = ? ORDER BY pinned DESC, published_at DESC': [{ id: 'n1', kind: 'notice', priority: 'urgent', title: '重要通知', body: '请查收', due_at: null, pinned: 1, status: 'published', published_at: '2026-09-29T10:00:00+08:00', author_email: 'monitor@stu.xjtu.edu.cn', private_token: 'secret' }]
-  });
-  const response = await onRequestGet({ env: { DB: database }, request: new Request('https://example.com/api/snapshot') } as never);
-  const body = await response.json() as { notifications: Record<string, unknown>[] };
-  expect(body.notifications).toMatchObject([{ id: 'n1', title: '重要通知', pinned: true }]);
-  expect(JSON.stringify(body.notifications)).not.toContain('author_email');
-  expect(JSON.stringify(body.notifications)).not.toContain('private_token');
 });
