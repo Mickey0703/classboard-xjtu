@@ -5,4 +5,4 @@ compatibility_date = "2026-09-28"
 [[d1_databases]]
 binding = "DB"
 database_name = "classboard-xjtu"
-database_id = "00000000-0000-0000-0000-000000000000" # Replace with the real D1 ID before deploying.
+database_id = "065baa99-8c37-4575-8936-d5dba7012f51" # Replace with the real D1 ID before deploying.
