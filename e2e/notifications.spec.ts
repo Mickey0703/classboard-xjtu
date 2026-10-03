@@ -31,6 +31,7 @@ test('committee publishes a task; a roster member confirms it; committee sees de
   await expect(page.getByText(/演示同学甲/)).toBeVisible();
   const card = page.locator('.notice-card').filter({ hasText: title });
   await card.getByRole('button', { name: '标记已完成' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(card.getByRole('button', { name: '撤销完成' })).toBeVisible();
 
   await page.goto('/?view=admin');

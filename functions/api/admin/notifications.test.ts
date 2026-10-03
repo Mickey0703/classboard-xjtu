@@ -21,6 +21,27 @@ function database(options: { notification?: Record<string, unknown> | null; memb
 }
 
 describe('notification publishing', () => {
+  it('validates the proof requirement as a task-only boolean', async () => {
+    for (const value of [{ ...draft, requiresCompletionProof: 'true' }, { ...draft, kind: 'notice', dueAt: null, requiresCompletionProof: true }]) {
+      const db = database();
+      expect((await onRequestPost(context(db, 'POST', value))).status).toBe(400);
+      expect(db.prepare).not.toHaveBeenCalled();
+    }
+    expect((await onRequestPost(context(database(), 'POST', { ...draft, requiresCompletionProof: true }))).status).toBe(200);
+  });
+  it('rejects executable image formats in notification drafts', async () => {
+    const db = database();
+    expect((await onRequestPost(context(db, 'POST', { ...draft, photos: [{ id: 'p1', dataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }] }))).status).toBe(400);
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+  it('returns completed students and their photos only through committee statistics', async () => {
+    const photos = [{ id: 'p1', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }];
+    const db = database({ recipients: [{ member_email: 'a@example.com', display_name: '甲', acknowledged_at: 'at', completed_at: 'at', completion_photos: JSON.stringify(photos) }] });
+    const response = await getStats(context(db, 'GET', null, 'https://class.example/api/admin/notification-stats?id=n1'));
+    const result = await response.json();
+    expect(result).toMatchObject({ completedRecipients: [{ email: 'a@example.com', displayName: '甲', completedAt: 'at', photos: [{ id: 'p1', dataUrl: '/api/admin/completion-photo?notificationId=n1&email=a%40example.com&photoId=p1' }] }] });
+    expect(JSON.stringify(result)).not.toContain('base64');
+  });
   it('rejects selected recipients outside the active roster and malformed selections', async () => {
     const db = database({ members: [{ email: 'a@example.com' }] });
     expect((await onRequestPost(context(db, 'POST', { ...draft, recipientEmails: ['unknown@example.com'] }))).status).toBe(400);

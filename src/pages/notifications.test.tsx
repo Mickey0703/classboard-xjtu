@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import Notifications from './Notifications';
 import Today from './Today';
@@ -12,6 +12,55 @@ const snapshot: Snapshot = {
     { id: 'task', kind: 'task', priority: 'important', title: '提交报名表', body: '周五前提交。', dueAt: '2026-10-02T18:00:00+08:00', pinned: false, publishedAt: '2026-09-29T09:00:00+08:00' }
   ]
 };
+const requiredSnapshot = { ...snapshot, notifications: snapshot.notifications.map(item => ({ ...item, requiresCompletionProof: item.kind === 'task' })) };
+
+it('renders notification photos between the selected portions of the body', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+  const withPhotos = { ...snapshot, notifications: [{ ...snapshot.notifications[0], body: '前文后文', photos: [{ id: 'p1', position: 2, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }] }] };
+  render(<Notifications snapshot={withPhotos} now={new Date()} />);
+  const photo = screen.getByRole('img', { name: '通知照片 1' });
+  expect(photo.closest('.notice-body')?.textContent).toBe('前文后文');
+  expect(photo.closest('button')?.previousSibling?.textContent).toBe('前文');
+  expect(photo.closest('button')?.nextSibling?.textContent).toBe('后文');
+  await screen.findByText('使用班级邮箱登录');
+  vi.unstubAllGlobals();
+});
+
+it('opens the required completion upload dialog without saving; cancel preserves the pending task', async () => {
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') { writes.push(JSON.parse(String(init.body))); return { ok: true }; }
+    return { ok: true, json: async () => url.endsWith('/session') ? { email: 'a@example.com', displayName: '同学 A' } : [{ notificationId: 'task', acknowledgedAt: null, completedAt: null }] };
+  }));
+  render(<Notifications snapshot={requiredSnapshot} now={new Date()} />);
+  fireEvent.click(await screen.findByRole('button', { name: '标记已完成' }));
+  const dialog = screen.getByRole('dialog', { name: '提交完成照片' });
+  expect(within(dialog).getByLabelText('添加完成照片')).toBeTruthy();
+  expect(within(dialog).getByText('请添加完成照片或截图，供班委查看。')).toBeTruthy();
+  expect((within(dialog).getByRole('button', { name: '确认' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(within(dialog).queryByText('无需照片，确认完成')).toBeNull();
+  expect(writes).toEqual([]);
+  fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(writes).toEqual([]);
+  vi.unstubAllGlobals();
+});
+
+it('completes a task directly without an upload dialog when proof is not required', async () => {
+  let completed = false;
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') { writes.push(JSON.parse(String(init.body))); completed = true; return { ok: true }; }
+    return { ok: true, json: async () => url.endsWith('/session') ? { email: 'a@example.com', displayName: '同学 A' } : [{ notificationId: 'task', acknowledgedAt: null, completedAt: completed ? '2026-10-03T12:00:00+08:00' : null }] };
+  }));
+  render(<Notifications snapshot={snapshot} now={new Date()} />);
+  fireEvent.click(await screen.findByRole('button', { name: '标记已完成' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await screen.findByRole('button', { name: '撤销完成' });
+  expect(writes).toEqual([{ notificationId: 'task', action: 'complete', photos: [] }]);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  vi.unstubAllGlobals();
+});
 
 it('lets visitors read notices but asks them to sign in before confirming', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 })));

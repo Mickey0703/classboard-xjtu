@@ -2,7 +2,7 @@ import { denied, invalid, requireAdmin, unavailable, type AdminData, type AdminE
 import { normalizeEmail, nowShanghai, validNotification } from './notification-helpers';
 
 type Ctx = Parameters<PagesFunction<AdminEnv, string, AdminData>>[0];
-interface Row { id: string; status: 'draft' | 'published' | 'withdrawn'; recipient_emails?: string | null }
+interface Row { id: string; status: 'draft' | 'published' | 'withdrawn'; recipient_emails?: string | null; photos?: string; requires_completion_proof?: number }
 const author = (context: Ctx) => context.data.cloudflareAccess?.JWT?.payload?.email?.toLowerCase() ?? '';
 const selectedEmails = (emails: string[] | undefined) => emails === undefined ? null : [...new Set(emails.map(email => normalizeEmail(email)!))];
 async function activeSelection(context: Ctx, emails: string[] | null) {
@@ -16,7 +16,7 @@ export const onRequestGet: PagesFunction<AdminEnv, string, AdminData> = async co
   if (!requireAdmin(context)) return denied();
   try {
     const result = await context.env.DB.prepare('SELECT * FROM notifications ORDER BY created_at DESC').all<Row>();
-    return Response.json((result.results ?? []).map(({ recipient_emails, ...row }) => ({ ...row, recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })));
+    return Response.json((result.results ?? []).map(({ recipient_emails, photos, requires_completion_proof, ...row }) => ({ ...row, requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })), { headers: { 'Cache-Control': 'no-store' } });
   } catch { return unavailable(); }
 };
 
@@ -29,8 +29,8 @@ export const onRequestPost: PagesFunction<AdminEnv, string, AdminData> = async c
   try {
     const emails = selectedEmails(body.recipientEmails);
     if (!await activeSelection(context, emails)) return invalid('所选人员不在活跃名单中，请刷新名单后重新选择');
-    await context.env.DB.prepare('INSERT INTO notifications (id, kind, priority, title, body, due_at, pinned, status, author_email, created_at, recipient_emails) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, body.kind, body.priority, body.title.trim(), body.body.trim(), body.dueAt, body.pinned ? 1 : 0, 'draft', author(context), nowShanghai(), emails === null ? null : JSON.stringify(emails)).run();
+    await context.env.DB.prepare('INSERT INTO notifications (id, kind, priority, title, body, due_at, pinned, status, author_email, created_at, recipient_emails, photos, requires_completion_proof) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, body.kind, body.priority, body.title.trim(), body.body, body.dueAt, body.pinned ? 1 : 0, 'draft', author(context), nowShanghai(), emails === null ? null : JSON.stringify(emails), JSON.stringify(body.photos ?? []), body.requiresCompletionProof ? 1 : 0).run();
     return Response.json({ id, status: 'draft' });
   } catch { return unavailable(); }
 };
@@ -46,8 +46,8 @@ export const onRequestPut: PagesFunction<AdminEnv, string, AdminData> = async co
     if (current.status !== 'draft') return Response.json({ error: '已发布通知不能直接修改，请撤回后重发' }, { status: 409 });
     const emails = selectedEmails(body.recipientEmails);
     if (!await activeSelection(context, emails)) return invalid('所选人员不在活跃名单中，请刷新名单后重新选择');
-    const result = await context.env.DB.prepare('UPDATE notifications SET kind=?, priority=?, title=?, body=?, due_at=?, pinned=?, recipient_emails=? WHERE id=? AND status=?')
-      .bind(body.kind, body.priority, body.title.trim(), body.body.trim(), body.dueAt, body.pinned ? 1 : 0, emails === null ? null : JSON.stringify(emails), body.id, 'draft').run();
+    const result = await context.env.DB.prepare('UPDATE notifications SET kind=?, priority=?, title=?, body=?, due_at=?, pinned=?, recipient_emails=?, photos=?, requires_completion_proof=? WHERE id=? AND status=?')
+      .bind(body.kind, body.priority, body.title.trim(), body.body, body.dueAt, body.pinned ? 1 : 0, emails === null ? null : JSON.stringify(emails), JSON.stringify(body.photos ?? []), body.requiresCompletionProof ? 1 : 0, body.id, 'draft').run();
     if (result.meta?.changes === 0) return Response.json({ error: '草稿状态已变化，保存未生效，请刷新后确认' }, { status: 409 });
     return Response.json({ id: body.id, status: 'draft' });
   } catch { return unavailable(); }

@@ -5,10 +5,10 @@ import { onRequestGet as receipts, onRequestPost as changeReceipt } from './rece
 import { onRequestGet as login } from './login';
 
 const email = 'student@stu.xjtu.edu.cn';
-function fakeDb(options: { roster?: boolean; recipient?: boolean; status?: string; kind?: string; updateChanges?: number } = {}) {
+function fakeDb(options: { roster?: boolean; recipient?: boolean; status?: string; kind?: string; updateChanges?: number; requiresProof?: boolean; completedAt?: string | null } = {}) {
   const prepare = vi.fn((sql: string) => ({ bind: (...args: unknown[]) => ({
     first: async () => sql.includes('FROM class_members') ? (options.roster ? { email, display_name: '同学甲', active: 1 } : null) :
-      sql.includes('FROM notifications') ? (options.recipient ? { id: 'n1', kind: options.kind ?? 'task', status: options.status ?? 'published', member_email: email } : null) : null,
+      sql.includes('FROM notifications') ? (options.recipient ? { id: 'n1', kind: options.kind ?? 'task', status: options.status ?? 'published', member_email: email, requires_completion_proof: options.requiresProof ? 1 : 0, completed_at: options.completedAt ?? null } : null) : null,
     all: async () => ({ results: sql.includes('FROM notification_recipients') ? [{ notification_id: 'n1', acknowledged_at: null, completed_at: null }] : [] }),
     run: async () => ({ success: true, meta: { changes: options.updateChanges ?? 1 } }), sql, args
   }) }));
@@ -20,6 +20,28 @@ function ctx(db: unknown, method: string, body?: unknown, authorized = true) {
 }
 
 describe('member identity and receipts', () => {
+  it('enforces proof on the server but still allows acknowledgement and undo', async () => {
+    for (const photos of [undefined, []]) {
+      const db = fakeDb({ recipient: true, requiresProof: true });
+      const response = await changeReceipt(ctx(db, 'POST', { notificationId: 'n1', action: 'complete', photos }));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: '请添加完成照片或截图后确认完成' });
+      expect(db.prepare.mock.calls.some(([sql]) => sql.startsWith('UPDATE'))).toBe(false);
+    }
+    for (const action of ['ack', 'undoComplete']) {
+      expect((await changeReceipt(ctx(fakeDb({ recipient: true, requiresProof: true }), 'POST', { notificationId: 'n1', action }))).status).toBe(200);
+    }
+    const photos = [{ id: 'p1', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }];
+    expect((await changeReceipt(ctx(fakeDb({ recipient: true, requiresProof: true }), 'POST', { notificationId: 'n1', action: 'complete', photos }))).status).toBe(200);
+    expect((await changeReceipt(ctx(fakeDb({ recipient: true, requiresProof: true, completedAt: 'already completed' }), 'POST', { notificationId: 'n1', action: 'complete', photos: [] }))).status).toBe(200);
+  });
+  it('rejects non-image and oversized completion photos without writing a receipt', async () => {
+    for (const photos of [[{ id: 'p1', dataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }], [{ id: 'p1', dataUrl: 'data:image/png;base64,' + 'A'.repeat(400001) }], 'bad']) {
+      const db = fakeDb({ recipient: true });
+      expect((await changeReceipt(ctx(db, 'POST', { notificationId: 'n1', action: 'complete', photos }))).status).toBe(400);
+      expect(db.prepare).not.toHaveBeenCalled();
+    }
+  });
   it('requires a local test token and a roster match', async () => {
     const env = { DB: fakeDb({ roster: true }), LOCAL_DEV_MODE: 'true', LOCAL_DEV_MEMBER_EMAIL: email, LOCAL_DEV_MEMBER_TOKEN: 'member-test' };
     const next = vi.fn(async () => new Response('ok'));

@@ -3,6 +3,47 @@ import { expect, it, vi } from 'vitest';
 import NotificationAdmin from './NotificationAdmin';
 import MembersAdmin from './MembersAdmin';
 
+it('offers a proof requirement only for tasks, restores it for drafts and clears it when switching to a notice', async () => {
+  const writes: Record<string, unknown>[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [{ email: 'a@example.com', displayName: '甲', active: true }] };
+    if (init?.method === 'PUT') { writes.push(JSON.parse(String(init.body))); return { ok: true, json: async () => ({}) }; }
+    return { ok: true, json: async () => [{ id: 'required', kind: 'task', priority: 'normal', title: '须交截图', body: '提交', requiresCompletionProof: true, due_at: '2026-10-05T18:00:00+08:00', pinned: 0, status: 'draft' }] };
+  }));
+  render(<NotificationAdmin onPublished={() => {}} />);
+  expect(screen.queryByRole('checkbox', { name: '须提交完成凭据' })).toBeNull();
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
+  expect((screen.getByRole('checkbox', { name: '须提交完成凭据' }) as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await screen.findByText('草稿已保存');
+  expect(writes[0]).toMatchObject({ kind: 'task', requiresCompletionProof: true });
+  fireEvent.click(screen.getByRole('button', { name: '编辑' }));
+  fireEvent.change(screen.getByLabelText('类型'), { target: { value: 'notice' } });
+  expect(screen.queryByRole('checkbox', { name: '须提交完成凭据' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(writes[1]).toMatchObject({ kind: 'notice', requiresCompletionProof: false, dueAt: null });
+  vi.unstubAllGlobals();
+});
+
+it('restores draft photos in the body preview and allows removing them before saving', async () => {
+  const photo = { id: 'p1', position: 2, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' };
+  const writes: Record<string, unknown>[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [{ email: 'a@example.com', displayName: '甲', active: true }] };
+    if (init?.method === 'PUT') { writes.push(JSON.parse(String(init.body))); return { ok: true, json: async () => ({}) }; }
+    return { ok: true, json: async () => [{ id: 'n1', kind: 'notice', priority: 'normal', title: '图文通知', body: '前文后文', photos: [photo], due_at: null, pinned: 0, status: 'draft' }] };
+  }));
+  render(<NotificationAdmin onPublished={() => {}} />);
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
+  expect(screen.getByRole('img', { name: '通知照片 1' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '删除照片 1' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await screen.findByText('草稿已保存');
+  expect(writes[0]).toMatchObject({ id: 'n1', body: '前文后文', photos: [] });
+  vi.unstubAllGlobals();
+});
+
 it('lets a committee member save a draft, publish it, and view receipt counts', async () => {
   let row: Record<string, unknown> | null = null;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
