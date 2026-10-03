@@ -4,6 +4,7 @@ import { shanghaiTimestamp } from './validate';
 export interface NotificationInput {
   id?: string; kind: NotificationKind; priority: NotificationPriority;
   title: string; body: string; dueAt: string | null; pinned: boolean;
+  recipientEmails?: string[];
 }
 
 export function validNotification(value: unknown): value is NotificationInput {
@@ -12,7 +13,8 @@ export function validNotification(value: unknown): value is NotificationInput {
   return ['notice', 'task'].includes(n.kind ?? '') && ['normal', 'important', 'urgent'].includes(n.priority ?? '') &&
     typeof n.title === 'string' && n.title.trim().length > 0 && n.title.length <= 120 &&
     typeof n.body === 'string' && n.body.trim().length > 0 && n.body.length <= 5000 &&
-    typeof n.pinned === 'boolean' && (n.kind === 'task' ? shanghaiTimestamp(n.dueAt) : n.dueAt === null);
+    typeof n.pinned === 'boolean' && (n.kind === 'task' ? shanghaiTimestamp(n.dueAt) : n.dueAt === null) &&
+    (n.recipientEmails === undefined || (Array.isArray(n.recipientEmails) && n.recipientEmails.length <= 500 && n.recipientEmails.every(email => normalizeEmail(email) !== null)));
 }
 
 export function normalizeEmail(value: unknown): string | null {

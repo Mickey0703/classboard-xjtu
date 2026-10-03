@@ -21,6 +21,23 @@ function database(options: { notification?: Record<string, unknown> | null; memb
 }
 
 describe('notification publishing', () => {
+  it('rejects selected recipients outside the active roster and malformed selections', async () => {
+    const db = database({ members: [{ email: 'a@example.com' }] });
+    expect((await onRequestPost(context(db, 'POST', { ...draft, recipientEmails: ['unknown@example.com'] }))).status).toBe(400);
+    expect((await onRequestPost(context(db, 'POST', { ...draft, recipientEmails: 'all' }))).status).toBe(400);
+  });
+  it('refuses to publish a draft with no selected recipients or a deactivated recipient', async () => {
+    for (const recipient_emails of ['[]', '["gone@example.com"]']) {
+      const db = database({ notification: { id: 'n1', status: 'draft', recipient_emails }, members: [{ email: 'a@example.com' }] });
+      expect((await onRequestPatch(context(db, 'PATCH', { id: 'n1', action: 'publish' }))).status).toBe(400);
+    }
+  });
+  it('validates the entire bulk roster before writing any entries', async () => {
+    const db = database();
+    expect((await addMember(context(db, 'POST', { members: [{ displayName: '甲', email: 'a@example.com' }, { displayName: '乙', email: 'bad' }] }))).status).toBe(400);
+    expect(db.prepare).not.toHaveBeenCalled();
+    expect((await addMember(context(db, 'POST', { members: [{ displayName: '甲', email: 'a@example.com' }, { displayName: '乙', email: 'b@example.com' }] }))).status).toBe(200);
+  });
   it('rejects visitors and invalid drafts', async () => {
     const db = database();
     expect((await onRequestPost(context(db, 'POST', draft, undefined, false))).status).toBe(403);
@@ -46,6 +63,10 @@ describe('notification publishing', () => {
     const db = database({ notification: { id: 'n1', status: 'draft' }, members: [{ email: 'a@stu.xjtu.edu.cn' }], updateChanges: 0 });
     expect((await onRequestPatch(context(db, 'PATCH', { id: 'n1', action: 'publish' }))).status).toBe(409);
     expect(db.batch).not.toHaveBeenCalled();
+  });
+  it('reports a draft save as a conflict if publication wins the race', async () => {
+    const db = database({ notification: { id: 'n1', status: 'draft' }, updateChanges: 0 });
+    expect((await onRequestPut(context(db, 'PUT', { ...draft, id: 'n1' }))).status).toBe(409);
   });
   it('rejects duplicate roster emails after normalizing case', async () => {
     const db = database();

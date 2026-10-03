@@ -1,15 +1,22 @@
 import { denied, invalid, requireAdmin, unavailable, type AdminData, type AdminEnv } from './auth';
-import { nowShanghai, validNotification, type NotificationInput } from './notification-helpers';
+import { normalizeEmail, nowShanghai, validNotification } from './notification-helpers';
 
 type Ctx = Parameters<PagesFunction<AdminEnv, string, AdminData>>[0];
-interface Row { id: string; status: 'draft' | 'published' | 'withdrawn' }
+interface Row { id: string; status: 'draft' | 'published' | 'withdrawn'; recipient_emails?: string | null }
 const author = (context: Ctx) => context.data.cloudflareAccess?.JWT?.payload?.email?.toLowerCase() ?? '';
+const selectedEmails = (emails: string[] | undefined) => emails === undefined ? null : [...new Set(emails.map(email => normalizeEmail(email)!))];
+async function activeSelection(context: Ctx, emails: string[] | null) {
+  if (emails === null) return true;
+  const members = await context.env.DB.prepare('SELECT email FROM class_members WHERE active=1').all<{ email: string }>();
+  const active = new Set((members.results ?? []).map(member => member.email.toLowerCase()));
+  return emails.every(email => active.has(email));
+}
 
 export const onRequestGet: PagesFunction<AdminEnv, string, AdminData> = async context => {
   if (!requireAdmin(context)) return denied();
   try {
-    const result = await context.env.DB.prepare('SELECT * FROM notifications ORDER BY created_at DESC').all();
-    return Response.json(result.results ?? []);
+    const result = await context.env.DB.prepare('SELECT * FROM notifications ORDER BY created_at DESC').all<Row>();
+    return Response.json((result.results ?? []).map(({ recipient_emails, ...row }) => ({ ...row, recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })));
   } catch { return unavailable(); }
 };
 
@@ -20,8 +27,10 @@ export const onRequestPost: PagesFunction<AdminEnv, string, AdminData> = async c
   if (!validNotification(body)) return invalid('通知内容或截止时间无效');
   const id = crypto.randomUUID();
   try {
-    await context.env.DB.prepare('INSERT INTO notifications (id, kind, priority, title, body, due_at, pinned, status, author_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, body.kind, body.priority, body.title.trim(), body.body.trim(), body.dueAt, body.pinned ? 1 : 0, 'draft', author(context), nowShanghai()).run();
+    const emails = selectedEmails(body.recipientEmails);
+    if (!await activeSelection(context, emails)) return invalid('所选人员不在活跃名单中，请刷新名单后重新选择');
+    await context.env.DB.prepare('INSERT INTO notifications (id, kind, priority, title, body, due_at, pinned, status, author_email, created_at, recipient_emails) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, body.kind, body.priority, body.title.trim(), body.body.trim(), body.dueAt, body.pinned ? 1 : 0, 'draft', author(context), nowShanghai(), emails === null ? null : JSON.stringify(emails)).run();
     return Response.json({ id, status: 'draft' });
   } catch { return unavailable(); }
 };
@@ -35,8 +44,11 @@ export const onRequestPut: PagesFunction<AdminEnv, string, AdminData> = async co
     const current = await context.env.DB.prepare('SELECT id, status FROM notifications WHERE id=?').bind(body.id).first<Row>();
     if (!current) return Response.json({ error: '通知不存在' }, { status: 404 });
     if (current.status !== 'draft') return Response.json({ error: '已发布通知不能直接修改，请撤回后重发' }, { status: 409 });
-    await context.env.DB.prepare('UPDATE notifications SET kind=?, priority=?, title=?, body=?, due_at=?, pinned=? WHERE id=? AND status=?')
-      .bind(body.kind, body.priority, body.title.trim(), body.body.trim(), body.dueAt, body.pinned ? 1 : 0, body.id, 'draft').run();
+    const emails = selectedEmails(body.recipientEmails);
+    if (!await activeSelection(context, emails)) return invalid('所选人员不在活跃名单中，请刷新名单后重新选择');
+    const result = await context.env.DB.prepare('UPDATE notifications SET kind=?, priority=?, title=?, body=?, due_at=?, pinned=?, recipient_emails=? WHERE id=? AND status=?')
+      .bind(body.kind, body.priority, body.title.trim(), body.body.trim(), body.dueAt, body.pinned ? 1 : 0, emails === null ? null : JSON.stringify(emails), body.id, 'draft').run();
+    if (result.meta?.changes === 0) return Response.json({ error: '草稿状态已变化，保存未生效，请刷新后确认' }, { status: 409 });
     return Response.json({ id: body.id, status: 'draft' });
   } catch { return unavailable(); }
 };
@@ -47,7 +59,7 @@ export const onRequestPatch: PagesFunction<AdminEnv, string, AdminData> = async 
   try { body = await context.request.json() as typeof body; } catch { return invalid(); }
   if (typeof body.id !== 'string' || !['publish', 'withdraw'].includes(String(body.action))) return invalid();
   try {
-    const current = await context.env.DB.prepare('SELECT id, status FROM notifications WHERE id=?').bind(body.id).first<Row>();
+    const current = await context.env.DB.prepare('SELECT id, status, recipient_emails FROM notifications WHERE id=?').bind(body.id).first<Row>();
     if (!current) return Response.json({ error: '通知不存在' }, { status: 404 });
     if (body.action === 'withdraw') {
       if (current.status !== 'published') return Response.json({ error: '只能撤回已发布通知' }, { status: 409 });
@@ -55,10 +67,16 @@ export const onRequestPatch: PagesFunction<AdminEnv, string, AdminData> = async 
       return Response.json({ id: body.id, status: 'withdrawn' });
     }
     if (current.status !== 'draft') return Response.json({ error: '只能发布草稿' }, { status: 409 });
+    const emails: string[] | null = current.recipient_emails == null ? null : JSON.parse(current.recipient_emails);
+    if (emails && !emails.length) return invalid('请编辑草稿，至少选择一位收件人');
+    if (!await activeSelection(context, emails)) return invalid('所选成员已停用，请编辑草稿重新选择收件人');
     const members = await context.env.DB.prepare('SELECT email FROM class_members WHERE active=1').all<{ email: string }>();
     if (!members.results?.length) return invalid('请先添加班级成员，再发布通知');
     // The trigger inserts the roster snapshot within this guarded UPDATE's transaction.
-    const result = await context.env.DB.prepare("UPDATE notifications SET status='published', published_at=? WHERE id=? AND status='draft' AND EXISTS (SELECT 1 FROM class_members WHERE active=1)")
+    const result = await context.env.DB.prepare(`UPDATE notifications SET status='published', published_at=? WHERE id=? AND status='draft' AND EXISTS (SELECT 1 FROM class_members WHERE active=1)
+      AND (recipient_emails IS NULL OR (json_array_length(recipient_emails)>0 AND NOT EXISTS (
+        SELECT 1 FROM json_each(recipient_emails) selected WHERE NOT EXISTS (SELECT 1 FROM class_members WHERE email=selected.value COLLATE NOCASE AND active=1)
+      )))`)
       .bind(nowShanghai(), body.id).run();
     if (result.meta?.changes === 0) return Response.json({ error: '通知状态或成员名单已变化，请刷新后重试' }, { status: 409 });
     return Response.json({ id: body.id, status: 'published' });

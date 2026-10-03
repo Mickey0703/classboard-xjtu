@@ -4,6 +4,7 @@ import type { Snapshot } from '../domain/types';
 import type { Page } from '../components/Shell';
 import { getEventStatus } from '../domain/events';
 import { getXianWeather, type WeatherResult } from '../weather';
+import ClassEmblem from '../components/ClassEmblem';
 
 const dayFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'long' });
 const dueFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -20,7 +21,7 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
   return <div className="page-stack home-page">
     <section className="welcome">
       <div className="welcome-copy"><span className="eyebrow"><CalendarDays size={14}/> {dayFmt.format(now)}</span><h1>今天的班务</h1><p>及时知悉，共同完成。<br className="mobile-break"/>班级的重要消息与近期安排，都在这里。</p><div className="welcome-actions"><button onClick={() => onNavigate('notifications')}>查看全部通知 <ArrowRight size={16}/></button><button onClick={() => onNavigate('schedule')}>查看日程</button></div></div>
-      <a className="identity-strip" href="/class-emblem.png" target="_blank" rel="noreferrer" aria-label="查看 ID 2601 完整班徽"><div className="identity-art"><img src="/class-emblem.png" alt="ID 2601 班徽"/></div><div className="identity-copy"><strong>ID 2601</strong><span>XJTU–POLIMI JOINT SCHOOL</span></div></a>
+      <a className="identity-strip" href="/class-emblem.png" target="_blank" rel="noreferrer" aria-label="查看 ID 2601 完整班徽"><div className="identity-art"><ClassEmblem/></div><div className="identity-copy"><strong>ID 2601</strong><span>XJTU–POLIMI JOINT SCHOOL</span></div></a>
     </section>
     {snapshot.demo && <div className="demo-banner"><Sparkles size={14}/> 演示数据 · 正式通知与事项由班委发布</div>}
     <div className="summary-strip">

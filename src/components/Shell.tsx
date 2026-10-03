@@ -1,4 +1,5 @@
 import { Bell, ClipboardList, Home, LockKeyhole } from 'lucide-react';
+import ClassEmblem from './ClassEmblem';
 
 export type Page = 'today' | 'schedule' | 'notifications' | 'admin';
 const tabs: { id: Page; label: string; icon: typeof Home }[] = [
@@ -10,7 +11,7 @@ const tabs: { id: Page; label: string; icon: typeof Home }[] = [
 export default function Shell({ page, setPage, brandName, children }: { page: Page; setPage: (p: Page) => void; brandName?: string; children: React.ReactNode }) {
   return <div className="app-shell">
     <header className="topbar"><div className="topbar-inner">
-      <div className="brand-mark"><img src="/class-emblem.png" alt="ID 2601 班徽"/></div>
+      <div className="brand-mark"><ClassEmblem/></div>
       <div className="brand-copy"><strong>{brandName || '西交班务'}</strong><span>西安交通大学 · 班级事务中心</span></div>
       <nav className="bottom-nav" aria-label="主导航">{tabs.map(({ id, label, icon: Icon }) =>
         <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(id)} aria-current={page === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>

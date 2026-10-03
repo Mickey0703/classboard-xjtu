@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "西交班务 · ID 2601",
+  "short_name": "西交班务",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f9",
+  "theme_color": "#a31d2a",
+  "icons": [
+    { "src": "/icons/classboard-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/classboard-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

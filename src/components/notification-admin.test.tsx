@@ -6,6 +6,7 @@ import MembersAdmin from './MembersAdmin';
 it('lets a committee member save a draft, publish it, and view receipt counts', async () => {
   let row: Record<string, unknown> | null = null;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [{ email: 'a@example.com', displayName: '甲', active: true }, { email: 'b@example.com', displayName: '乙', active: true }] };
     if (url.includes('notification-stats')) return { ok: true, json: async () => ({ total: 2, acknowledged: 1, completed: 0, notAcknowledged: [{ email: 'b@stu.xjtu.edu.cn', displayName: '同学 B' }], notCompleted: [] }) };
     if (url.endsWith('/notifications') && (!init?.method || init.method === 'GET')) return { ok: true, json: async () => row ? [row] : [] };
     if (init?.method === 'POST') { row = { id: 'n1', kind: 'notice', priority: 'urgent', title: '班级会议', body: '明天开会', due_at: null, pinned: 1, status: 'draft' }; return { ok: true, json: async () => ({ id: 'n1' }) }; }
@@ -43,15 +44,69 @@ it('lets committee members add and deactivate roster entries', async () => {
   vi.unstubAllGlobals();
 });
 
+it('previews a pasted roster and imports it in a single request', async () => {
+  let members: { displayName: string; email: string; active: boolean }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      const body = JSON.parse(String(init.body));
+      members = body.members.map((m: { displayName: string; email: string }) => ({ ...m, active: true }));
+    }
+    return { ok: true, json: async () => members };
+  }));
+  render(<MembersAdmin />);
+  fireEvent.change(screen.getByLabelText('批量名单'), { target: { value: '姓名,邮箱\n张三,a@example.com\n李四,b@example.com' } });
+  expect(screen.getByText('待导入 2 人')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '导入名单' }));
+  await screen.findByText('已导入 2 位成员');
+  expect(screen.getByText('张三')).toBeTruthy();
+  expect(screen.getByText('李四')).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
 it('reports a published notice separately from a failed homepage refresh', async () => {
   let row: Record<string, unknown> | null = { id: 'n2', kind: 'notice', priority: 'normal', title: '已准备通知', body: '内容', due_at: null, pinned: 0, status: 'draft' };
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+    if (_url.endsWith('/members')) return { ok: true, json: async () => [{ email: 'a@example.com', displayName: '甲', active: true }] };
     if (init?.method === 'PATCH') { row = { ...row, status: 'published' }; return { ok: true, json: async () => ({ id: 'n2', status: 'published' }) }; }
     return { ok: true, json: async () => [row] };
   }));
   render(<NotificationAdmin onPublished={vi.fn(async () => { throw Error('offline'); })} />);
   fireEvent.click(await screen.findByRole('button', { name: '发布通知' }));
   expect(await screen.findByText(/已发布，但首页刷新失败/)).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
+it('saves individual recipients, selects all active members, and restores the draft selection', async () => {
+  const requests: Record<string, unknown>[] = [];
+  let row: Record<string, unknown> | null = null;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [
+      { email: 'a@example.com', displayName: '甲', active: true },
+      { email: 'b@example.com', displayName: '乙', active: true },
+      { email: 'c@example.com', displayName: '停用同学', active: false }
+    ] };
+    if (init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)); requests.push(body);
+      row = { ...body, id: 'selected', status: 'draft', due_at: null };
+      return { ok: true, json: async () => ({ id: 'selected', status: 'draft' }) };
+    }
+    return { ok: true, json: async () => row ? [row] : [] };
+  }));
+  render(<NotificationAdmin onPublished={() => {}} />);
+  await screen.findByText('已选 2 / 2 人');
+  fireEvent.click(screen.getByText(/选择收件人/));
+  expect(screen.queryByLabelText(/停用同学/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '清空' }));
+  fireEvent.click(screen.getByLabelText(/甲.*a@example.com/));
+  fireEvent.change(screen.getByLabelText('通知标题'), { target: { value: '选择测试' } });
+  fireEvent.change(screen.getByLabelText('通知正文'), { target: { value: '内容' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await screen.findByRole('button', { name: '编辑' });
+  expect(requests[0].recipientEmails).toEqual(['a@example.com']);
+  fireEvent.click(screen.getByRole('button', { name: '编辑' }));
+  expect(screen.getByText('已选 1 / 2 人')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '全选' }));
+  expect(screen.getByText('已选 2 / 2 人')).toBeTruthy();
   vi.unstubAllGlobals();
 });
 

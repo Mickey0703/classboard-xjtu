@@ -1,5 +1,6 @@
 import { denied, invalid, requireAdmin, unavailable, type AdminData, type AdminEnv } from './auth';
 import { normalizeEmail } from './notification-helpers';
+import { validateRoster } from '../../../src/domain/roster';
 
 type Ctx = Parameters<PagesFunction<AdminEnv, string, AdminData>>[0];
 const validName = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 80;
@@ -14,8 +15,18 @@ export const onRequestGet: PagesFunction<AdminEnv, string, AdminData> = async co
 
 export const onRequestPost: PagesFunction<AdminEnv, string, AdminData> = async context => {
   if (!requireAdmin(context)) return denied();
-  let body: { email?: unknown; displayName?: unknown };
+  let body: { email?: unknown; displayName?: unknown; members?: unknown };
   try { body = await context.request.json() as typeof body; } catch { return invalid(); }
+  if (!body || typeof body !== 'object') return invalid();
+  if (body.members !== undefined) {
+    let members;
+    try { members = validateRoster(body.members); }
+    catch (cause) { return invalid(cause instanceof Error ? cause.message : '名单无效'); }
+    try {
+      await context.env.DB.batch(members.map(member => context.env.DB.prepare('INSERT INTO class_members (email, display_name, active) VALUES (?, ?, 1) ON CONFLICT(email) DO UPDATE SET display_name=excluded.display_name, active=1').bind(member.email, member.displayName)));
+      return Response.json({ imported: members.length });
+    } catch { return unavailable(); }
+  }
   const email = normalizeEmail(body.email);
   if (!email || !validName(body.displayName)) return invalid('请填写有效的姓名与邮箱');
   try {
