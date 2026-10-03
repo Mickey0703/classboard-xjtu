@@ -5,7 +5,8 @@ import type { EventItem, Snapshot } from '../domain/types';
 import NotificationAdmin from '../components/NotificationAdmin';
 import MembersAdmin from '../components/MembersAdmin';
 
-type Tab = 'notifications' | 'members' | 'events' | 'settings';
+type Tab = 'notifications' | 'notification-records' | 'members' | 'events' | 'settings';
+const tabs: { id: Tab; label: string }[] = [{ id: 'notifications', label: '通知' }, { id: 'notification-records', label: '通知记录' }, { id: 'events', label: '日程' }, { id: 'members', label: '成员' }, { id: 'settings', label: '网站设置' }];
 const blankEvent: EventItem = { id: '', title: '', description: '', category: '班级', startAt: '', dueAt: '', done: false };
 
 export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapshot | null; onSaved: () => Promise<void> | void; onBack: () => void }) {
@@ -30,9 +31,9 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
   return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS MANAGEMENT</span><h1>班委管理</h1><p>发布通知，维护成员和班级事项</p></div><LockKeyhole className="title-illustration" size={52}/></div><button className="text-action" onClick={onBack}><ArrowLeft size={16}/> 返回首页</button>
     {checking ? <div className="state-card">正在检查班委登录状态…</div> : !email ? <div className="state-card"><h2>班委登录</h2><p>只有班委邮箱通过验证后才能修改班务资料。</p><a className="primary-button" href="/api/admin/login">使用班委邮箱登录</a></div> : <>
       <div className="demo-banner">当前班委：{email} · 修改会同步显示给所有访问者</div>
-      <div className="admin-tabs">{(['notifications', 'members', 'events', 'settings'] as const).map((value, i) => <button key={value} className={tab === value ? 'selected' : ''} onClick={() => { setTab(value); setError(''); setSuccess(''); }}>{['通知', '成员', '日程', '网站设置'][i]}</button>)}</div>
+      <nav className="admin-tabs" aria-label="班委管理菜单">{tabs.map(({ id, label }) => <button key={id} className={tab === id ? 'selected' : ''} aria-pressed={tab === id} onClick={() => { setTab(id); setError(''); setSuccess(''); }}>{label}</button>)}</nav>
       <section className="card admin-card">
-        {tab === 'notifications' && <NotificationAdmin onPublished={onSaved}/>}
+        {(tab === 'notifications' || tab === 'notification-records') && <NotificationAdmin onPublished={onSaved} view={tab === 'notifications' ? 'compose' : 'records'} onViewChange={view => setTab(view === 'compose' ? 'notifications' : 'notification-records')}/>}
         {tab === 'members' && <MembersAdmin/>}
         {tab === 'events' && <><div className="section-head"><h2>{event.id ? '编辑事项' : '添加事项'}</h2><Plus size={18}/></div><form onSubmit={e => { e.preventDefault(); void action('events', event.id ? 'PUT' : 'POST', event, '保存事项'); }}><div className="form-grid">
           <label className="field wide">事项标题<input required value={event.title} onChange={e => setEvent({ ...event, title: e.target.value })}/></label><label className="field">类别<select value={event.category} onChange={e => setEvent({ ...event, category: e.target.value })}><option>班级</option><option>学习</option><option>活动</option></select></label><label className="field">状态<select value={event.done ? 'done' : 'open'} onChange={e => setEvent({ ...event, done: e.target.value === 'done' })}><option value="open">进行中</option><option value="done">已完成</option></select></label>

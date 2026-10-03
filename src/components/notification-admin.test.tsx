@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import NotificationAdmin from './NotificationAdmin';
+import { useState } from 'react';
+import NotificationEditor, { type NotificationAdminView } from './NotificationAdmin';
 import MembersAdmin from './MembersAdmin';
+
+function NotificationAdmin({ onPublished, initialView = 'compose' }: { onPublished: () => Promise<void> | void; initialView?: NotificationAdminView }) {
+  const [view, setView] = useState<NotificationAdminView>(initialView);
+  return <><nav><button onClick={() => setView('compose')}>通知</button><button onClick={() => setView('records')}>通知记录</button></nav><NotificationEditor view={view} onViewChange={setView} onPublished={onPublished}/></>;
+}
 
 it('offers a proof requirement only for tasks, restores it for drafts and clears it when switching to a notice', async () => {
   const writes: Record<string, unknown>[] = [];
@@ -12,6 +18,7 @@ it('offers a proof requirement only for tasks, restores it for drafts and clears
   }));
   render(<NotificationAdmin onPublished={() => {}} />);
   expect(screen.queryByRole('checkbox', { name: '须提交完成凭据' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '通知记录' }));
   fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
   expect((screen.getByRole('checkbox', { name: '须提交完成凭据' }) as HTMLInputElement).checked).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
@@ -34,7 +41,7 @@ it('restores draft photos in the body preview and allows removing them before sa
     if (init?.method === 'PUT') { writes.push(JSON.parse(String(init.body))); return { ok: true, json: async () => ({}) }; }
     return { ok: true, json: async () => [{ id: 'n1', kind: 'notice', priority: 'normal', title: '图文通知', body: '前文后文', photos: [photo], due_at: null, pinned: 0, status: 'draft' }] };
   }));
-  render(<NotificationAdmin onPublished={() => {}} />);
+  render(<NotificationAdmin onPublished={() => {}} initialView="records"/>);
   fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
   expect(screen.getByRole('img', { name: '通知照片 1' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '删除照片 1' }));
@@ -55,7 +62,7 @@ it('lets a committee member save a draft, publish it, and view receipt counts', 
     throw Error('unexpected request');
   }));
   render(<NotificationAdmin onPublished={vi.fn()} />);
-  await screen.findByText('还没有通知草稿');
+  await screen.findByText('已选 2 / 2 人');
   fireEvent.change(screen.getByLabelText('通知标题'), { target: { value: '班级会议' } });
   fireEvent.change(screen.getByLabelText('通知正文'), { target: { value: '明天开会' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
@@ -111,7 +118,7 @@ it('reports a published notice separately from a failed homepage refresh', async
     if (init?.method === 'PATCH') { row = { ...row, status: 'published' }; return { ok: true, json: async () => ({ id: 'n2', status: 'published' }) }; }
     return { ok: true, json: async () => [row] };
   }));
-  render(<NotificationAdmin onPublished={vi.fn(async () => { throw Error('offline'); })} />);
+  render(<NotificationAdmin onPublished={vi.fn(async () => { throw Error('offline'); })} initialView="records"/>);
   fireEvent.click(await screen.findByRole('button', { name: '发布通知' }));
   expect(await screen.findByText(/已发布，但首页刷新失败/)).toBeTruthy();
   vi.unstubAllGlobals();
@@ -158,7 +165,7 @@ it('refreshes the shared public snapshot after withdrawal', async () => {
     if (init?.method === 'PATCH') { row = { ...row, status: 'withdrawn' }; return { ok: true, json: async () => ({ id: 'n3', status: 'withdrawn' }) }; }
     return { ok: true, json: async () => [row] };
   }));
-  render(<NotificationAdmin onPublished={onChanged} />);
+  render(<NotificationAdmin onPublished={onChanged} initialView="records"/>);
   fireEvent.click(await screen.findByRole('button', { name: '撤回' }));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   vi.unstubAllGlobals();

@@ -1,6 +1,6 @@
 import { ArrowRight, Bell, CalendarDays, CheckCircle2, ClipboardList, CloudSun, Pin, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Snapshot } from '../domain/types';
+import type { RecipientStatus, Snapshot } from '../domain/types';
 import type { Page } from '../components/Shell';
 import { getEventStatus } from '../domain/events';
 import { getXianWeather, type WeatherResult } from '../weather';
@@ -10,13 +10,14 @@ const dayFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', mon
 const dueFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 const weight = { urgent: 3, important: 2, normal: 1 };
 
-export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapshot; now: Date; onNavigate: (page: Page) => void }) {
+export default function Today({ snapshot, now, onNavigate, receipts = null, receiptStatus = 'guest' }: { snapshot: Snapshot; now: Date; onNavigate: (page: Page) => void; receipts?: RecipientStatus[] | null; receiptStatus?: 'loading' | 'ready' | 'guest' | 'error' }) {
   const [weather, setWeather] = useState<WeatherResult | null>(null);
   useEffect(() => { let active = true; void getXianWeather().then(result => { if (active) setWeather(result); }); return () => { active = false; }; }, []);
   const upcoming = snapshot.events.filter(e => !e.done && Date.parse(e.dueAt) >= now.getTime()).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const notices = [...snapshot.notifications].sort((a, b) => Number(b.pinned) - Number(a.pinned) || weight[b.priority] - weight[a.priority] || b.publishedAt.localeCompare(a.publishedAt));
   const important = notices.find(n => n.priority !== 'normal');
   const tasks = snapshot.notifications.filter(n => n.kind === 'task');
+  const pendingTasks = tasks.filter(task => receipts?.some(receipt => receipt.notificationId === task.id && !receipt.completedAt)).length;
 
   return <div className="page-stack home-page">
     <section className="welcome">
@@ -26,8 +27,8 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
     {snapshot.demo && <div className="demo-banner"><Sparkles size={14}/> 演示数据 · 正式通知与事项由班委发布</div>}
     <div className="summary-strip">
       <div><span className="metric-icon"><Bell size={19}/></span><span className="metric-copy"><small>已发布通知</small><strong>{snapshot.notifications.length}<em>条</em></strong></span></div>
-      <div><span className="metric-icon"><ClipboardList size={19}/></span><span className="metric-copy"><small>通知待办</small><strong>{tasks.length}<em>项</em></strong></span></div>
-      <div><span className="metric-icon"><CheckCircle2 size={19}/></span><span className="metric-copy"><small>近期班级事项</small><strong>{upcoming.length}<em>件</em></strong></span></div>
+      <div role="status" aria-label="未完成待办"><span className="metric-icon"><ClipboardList size={19}/></span><span className="metric-copy"><small>未完成待办</small><strong>{receipts === null ? '—' : pendingTasks}<em>项</em></strong>{receiptStatus === 'guest' ? <a className="metric-hint" href="/api/member/login">登录后查看</a> : receiptStatus === 'loading' ? <span className="metric-hint">正在读取…</span> : receiptStatus === 'error' ? <span className="metric-hint">暂时无法更新</span> : null}</span></div>
+      <div><span className="metric-icon"><CheckCircle2 size={19}/></span><span className="metric-copy"><small>近期日程</small><strong>{upcoming.length}<em>件</em></strong></span></div>
     </div>
     {important && <section className="home-notice"><div className="home-notice-symbol"><Bell size={22}/></div><div className="home-notice-copy"><span className="home-notice-label">{important.priority === 'urgent' ? '紧急通知' : '重要通知'}{important.pinned && <><span className="meta-divider"/><Pin size={11}/> 置顶</>}</span><h2>{important.title}</h2><p>{important.body}</p></div><button onClick={() => onNavigate('notifications')}>查看通知 <ArrowRight size={15}/></button></section>}
     <div className="home-workspace">
@@ -36,7 +37,7 @@ export default function Today({ snapshot, now, onNavigate }: { snapshot: Snapsho
         <div className="digest-footnote"><CheckCircle2 size={14}/> 使用班级邮箱登录，可确认知悉和完成待办。</div>
       </section>
       <aside className="column-stack">
-        <section className="card upcoming-card"><div className="section-head"><div><span className="section-kicker">COMING UP</span><h2>近期事项</h2></div><CalendarDays size={18} className="muted-icon"/></div>{upcoming.length ? <div className="event-mini-list">{upcoming.slice(0, 3).map(e => <div className="event-mini" key={e.id}><span className={getEventStatus(now, e) === 'soon' ? 'event-dot urgent' : 'event-dot'}/><div><strong>{e.title}</strong><small>{e.category} · {dueFmt.format(new Date(e.dueAt))} 截止</small></div></div>)}</div> : <p className="empty-note">近期暂无待办事项。</p>}<button className="text-action" onClick={() => onNavigate('schedule')}>查看全部日程 <ArrowRight size={14}/></button></section>
+        <section className="card upcoming-card"><div className="section-head"><div><span className="section-kicker">COMING UP</span><h2>近期日程</h2></div><CalendarDays size={18} className="muted-icon"/></div>{upcoming.length ? <div className="event-mini-list">{upcoming.slice(0, 3).map(e => <div className="event-mini" key={e.id}><span className={getEventStatus(now, e) === 'soon' ? 'event-dot urgent' : 'event-dot'}/><div><strong>{e.title}</strong><small>{e.category} · {dueFmt.format(new Date(e.dueAt))} 截止</small></div></div>)}</div> : <p className="empty-note">近期暂无日程安排。</p>}<button className="text-action" onClick={() => onNavigate('schedule')}>查看全部日程 <ArrowRight size={14}/></button></section>
         <section className="card weather-card"><div className="section-head"><div><span className="section-kicker">CAMPUS WEATHER</span><h2>西安天气</h2></div><CloudSun size={23}/></div>{!weather ? <div className="weather-placeholder">正在查询西安天气…</div> : weather.available ? <><div className="weather-current"><strong>{weather.temperature}<sup>°</sup></strong><span>{weather.condition}<small>体感 {weather.feelsLike}°</small></span></div><div className="weather-details"><span>湿度 <strong>{weather.humidity}%</strong></span><span>风速 <strong>{weather.wind} km/h</strong></span></div></> : <div className="weather-placeholder">天气暂不可用</div>}<a className="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noreferrer">天气数据：Open-Meteo ↗</a></section>
       </aside>
     </div>

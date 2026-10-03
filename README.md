@@ -6,7 +6,11 @@ ID 2601 班务看板。访客可查看首页、班级日程和通知；班委经
 
 iOS 添加到主屏幕使用 `public/apple-touch-icon.png`（180 × 180、不透明正方形班徽）；`public/site.webmanifest` 提供网页 App 名称及 192 / 512 像素图标。更新图标后，已添加的旧图标可能需要移除，再从 Safari 添加到主屏幕。
 
-所有页面的页脚提供“添加到主屏幕”操作说明，默认展开 iPhone / iPad 的 Safari 步骤，Android 用户可展开 Chrome 步骤。文案参考 [Apple 官方指南](https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/26/ios/26)和 [Chrome 创建快捷方式](https://support.google.com/chrome/answer/15085120?co=GENIE.Platform%3DAndroid&hl=zh-Hans)、[安装 Web 应用](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=zh-Hans)说明，兼顾新旧菜单名称及应用内浏览器入口。
+“今日”页面的页脚提供“添加到主屏幕”操作说明，默认展开 iPhone / iPad 的 Safari 步骤，Android 用户可展开 Chrome 步骤；日程、通知和班委管理页面不显示该说明。文案参考 [Apple 官方指南](https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/26/ios/26)和 [Chrome 创建快捷方式](https://support.google.com/chrome/answer/15085120?co=GENIE.Platform%3DAndroid&hl=zh-Hans)、[安装 Web 应用](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=zh-Hans)说明，兼顾新旧菜单名称及应用内浏览器入口。
+
+主导航依次为“今日、通知、日程”。首页“未完成待办”只统计当前登录同学收到、仍已发布且尚未完成的待办，包含逾期待办，不包含公告、撤回通知或发给其他人的待办。完成或撤销完成后回执会同步到首页计数；进入“今日”、重新聚焦浏览器、返回可见状态及每分钟都会刷新。未登录时显示“登录后查看”，读取失败时提示暂时无法更新。
+
+班委管理菜单依次为“通知、通知记录、日程、成员、网站设置”。“通知”用于撰写草稿；保存后进入“通知记录”，在此编辑、发布、撤回或查看统计。成员名单使用紧凑行布局，手机端保留完整姓名、邮箱和停用操作。
 
 展示标题使用自托管 Noto Serif SC 衬线字体子集，正文与操作控件保持系统无衬线字体。字形范围与开源许可见 `public/fonts/README.md`；新增固定展示标题时需同步更新字形子集。
 

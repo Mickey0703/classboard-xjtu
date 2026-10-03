@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import Today from './Today';
 import Schedule from './Schedule';
@@ -26,8 +26,45 @@ it('centers the homepage on notices and upcoming matters without class-time widg
 it('offers only today, schedule and notifications in the main navigation', () => {
   render(<Shell page="today" setPage={vi.fn()} brandName="ID 2601 班务"><div>内容</div></Shell>);
   const nav = within(screen.getByRole('navigation', { name: '主导航' }));
-  expect(nav.getAllByRole('button').map(button => button.textContent)).toEqual(['今日', '日程', '通知']);
+  expect(nav.getAllByRole('button').map(button => button.textContent)).toEqual(['今日', '通知', '日程']);
   expect(screen.getByRole('img', { name: 'ID 2601 班徽' })).toBeTruthy();
+});
+
+it('counts only the signed-in student’s pending published tasks and updates after complete, undo and refocus', async () => {
+  const task = { ...snapshot.notifications[0], id: 'pending', kind: 'task' as const, title: '待办 A', dueAt: '2026-12-01T18:00:00+08:00', requiresCompletionProof: false };
+  const data = { ...snapshot, notifications: [snapshot.notifications[0], task, { ...task, id: 'done', title: '待办 B' }, { ...task, id: 'other', title: '其他人的待办' }] };
+  let completed = false;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/api/snapshot')) return { ok: true, json: async () => data };
+    if (url.endsWith('/api/member/session')) return { ok: true, json: async () => ({ email: 'a@example.com', displayName: '同学 A' }) };
+    if (url.endsWith('/api/member/receipt') && init?.method === 'POST') { completed = JSON.parse(String(init.body)).action === 'complete'; return { ok: true }; }
+    if (url.endsWith('/api/member/receipt')) return { ok: true, json: async () => [
+      { notificationId: 'pending', acknowledgedAt: null, completedAt: completed ? '2026-10-03T12:00:00+08:00' : null },
+      { notificationId: 'done', acknowledgedAt: 'at', completedAt: 'at' },
+      { notificationId: 'withdrawn', acknowledgedAt: null, completedAt: null }
+    ] };
+    return { ok: false, status: 503 };
+  }));
+  render(<App />);
+  const metric = () => screen.getByRole('status', { name: '未完成待办' });
+  await waitFor(() => expect(metric().textContent).toContain('1项'));
+  const nav = within(screen.getByRole('navigation', { name: '主导航' }));
+  fireEvent.click(nav.getByRole('button', { name: '通知' }));
+  await screen.findByText(/同学 A/);
+  const card = () => within(screen.getByRole('heading', { name: '待办 A' }).closest('article')!);
+  fireEvent.click(card().getByRole('button', { name: '标记已完成' }));
+  await card().findByRole('button', { name: '撤销完成' });
+  fireEvent.click(nav.getByRole('button', { name: '今日' }));
+  expect(metric().textContent).toContain('0项');
+  fireEvent.click(nav.getByRole('button', { name: '通知' }));
+  fireEvent.click(await card().findByRole('button', { name: '撤销完成' }));
+  await card().findByRole('button', { name: '标记已完成' });
+  fireEvent.click(nav.getByRole('button', { name: '今日' }));
+  expect(metric().textContent).toContain('1项');
+  completed = true;
+  fireEvent(window, new Event('focus'));
+  await waitFor(() => expect(metric().textContent).toContain('0项'));
+  vi.unstubAllGlobals();
 });
 
 it('loads the homepage without requiring semester settings', async () => {

@@ -21,10 +21,12 @@ test('inline photos survive drafts; required proof is enforced and appears priva
   const row = page.locator('.admin-notice-row').filter({ hasText: title });
   await expect(row).toBeVisible();
   await page.reload();
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await row.getByRole('button', { name: '编辑' }).click();
   await expect(page.getByRole('checkbox', { name: '须提交完成凭据' })).toBeChecked();
   await expect(page.getByRole('img', { name: '通知照片 1', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '取消编辑' }).click();
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await row.getByRole('button', { name: '发布通知' }).click();
   await expect(row.getByText(/已发布/)).toBeVisible();
   const snapshot = await (await request.get('/api/snapshot')).json();
@@ -78,6 +80,7 @@ test('inline photos survive drafts; required proof is enforced and appears priva
   } finally { await anonymous.close(); }
 
   await page.goto('/?view=admin');
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await row.getByRole('button', { name: '查看统计' }).click();
   await expect(page.getByRole('heading', { name: '已完成同学与照片' })).toBeVisible();
   const proof = page.getByRole('button', { name: '放大演示同学甲的完成照片 1', exact: true });
@@ -91,6 +94,7 @@ test('inline photos survive drafts; required proof is enforced and appears priva
   await expect(card.getByRole('button', { name: '标记已完成' })).toBeVisible();
   await expect(card.getByRole('img', { name: '完成照片 1', exact: true })).toHaveCount(0);
   await page.goto('/?view=admin');
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await row.getByRole('button', { name: '查看统计' }).click();
   await expect(page.getByText('暂无已完成同学')).toBeVisible();
   await row.getByRole('button', { name: '撤回' }).click();

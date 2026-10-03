@@ -10,7 +10,7 @@ type Member = { email: string; displayName: string };
 const priorityOrder = { urgent: 3, important: 2, normal: 1 };
 const timeFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 
-export default function Notifications({ snapshot, now }: { snapshot: Snapshot; now: Date }) {
+export default function Notifications({ snapshot, now, onReceiptsChanged }: { snapshot: Snapshot; now: Date; onReceiptsChanged?: (rows: RecipientStatus[]) => void }) {
   const [member, setMember] = useState<Member | null>(null);
   const [checking, setChecking] = useState(true);
   const [receipts, setReceipts] = useState<RecipientStatus[]>([]);
@@ -30,13 +30,13 @@ export default function Notifications({ snapshot, now }: { snapshot: Snapshot; n
         const status = await fetch('/api/member/receipt', { credentials: 'same-origin' });
         if (!status.ok) throw Error('receipt unavailable');
         const rows = await status.json() as RecipientStatus[];
-        if (active) { setMember(person); setReceipts(rows); }
+        if (active) { setMember(person); setReceipts(rows); onReceiptsChanged?.(rows); }
       } catch { if (active) setMember(null); }
       finally { if (active) setChecking(false); }
     };
     void load();
     return () => { active = false; };
-  }, []);
+  }, [onReceiptsChanged]);
   const change = async (notificationId: string, action: 'ack' | 'complete' | 'undoComplete', completionPhotos?: Photo[]) => {
     if (pending) return;
     setError(''); setPending(notificationId);
@@ -46,7 +46,8 @@ export default function Notifications({ snapshot, now }: { snapshot: Snapshot; n
       if (action === 'complete') { setCompleting(null); setPhotos([]); }
       const refreshed = await fetch('/api/member/receipt', { credentials: 'same-origin', cache: 'no-store' });
       if (!refreshed.ok) throw Error('已保存，但状态刷新失败，请重新打开通知页');
-      setReceipts(await refreshed.json() as RecipientStatus[]);
+      const rows = await refreshed.json() as RecipientStatus[];
+      setReceipts(rows); onReceiptsChanged?.(rows);
     } catch (cause) { setError(cause instanceof Error ? cause.message : '确认失败'); }
     finally { setPending(''); }
   };

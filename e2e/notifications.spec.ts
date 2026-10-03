@@ -27,15 +27,31 @@ test('committee publishes a task; a roster member confirms it; committee sees de
   await expect(page.getByText(/已知悉 0\/2/)).toBeVisible();
 
   await page.context().addCookies([{ name: 'local_member', value: 'member-test', domain: '127.0.0.1', path: '/' }]);
+  await page.goto('/');
+  const metric = page.getByRole('status', { name: '未完成待办' });
+  await expect(metric.locator('strong')).toHaveText(/\d+项/);
+  const pendingBefore = parseInt(await metric.locator('strong').innerText());
+  expect(pendingBefore).toBeGreaterThan(0);
   await page.goto('/?view=notifications');
   await expect(page.getByText(/演示同学甲/)).toBeVisible();
   const card = page.locator('.notice-card').filter({ hasText: title });
   await card.getByRole('button', { name: '标记已完成' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(card.getByRole('button', { name: '撤销完成' })).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '今日', exact: true }).click();
+  await expect(metric.locator('strong')).toHaveText(`${pendingBefore - 1}项`);
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
+  await card.getByRole('button', { name: '撤销完成' }).click();
+  await expect(card.getByRole('button', { name: '标记已完成' })).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '今日', exact: true }).click();
+  await expect(metric.locator('strong')).toHaveText(`${pendingBefore}项`);
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
+  await card.getByRole('button', { name: '标记已完成' }).click();
+  await expect(card.getByRole('button', { name: '撤销完成' })).toBeVisible();
 
   await page.goto('/?view=admin');
   await expect(page.getByText(/monitor@stu.xjtu.edu.cn/)).toBeVisible();
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await page.locator('.admin-notice-row').filter({ hasText: title }).getByRole('button', { name: '查看统计' }).click();
   await expect(page.getByText(/已知悉 1\/2/)).toBeVisible();
   await expect(page.getByText(/已完成 1\/2/)).toBeVisible();
