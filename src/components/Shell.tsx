@@ -1,5 +1,6 @@
 import { Bell, ClipboardList, Home, LockKeyhole } from 'lucide-react';
 import ClassEmblem from './ClassEmblem';
+import HomeScreenGuide from './HomeScreenGuide';
 
 export type Page = 'today' | 'schedule' | 'notifications' | 'admin';
 const tabs: { id: Page; label: string; icon: typeof Home }[] = [
@@ -19,6 +20,6 @@ export default function Shell({ page, setPage, brandName, children }: { page: Pa
       <button className="admin-link" onClick={() => setPage('admin')} aria-label="班委管理"><LockKeyhole size={16}/><span>班委管理</span></button>
     </div></header>
     <main className="main-wrap">{children}</main>
-    <footer className="site-footer"><span>ID 2601 · XJTU–POLIMI</span><span>让重要的事，有处可寻。</span></footer>
+    <footer className="site-footer"><HomeScreenGuide/><div className="footer-meta"><span>ID 2601 · XJTU–POLIMI</span><span>让重要的事，有处可寻。</span></div></footer>
   </div>;
 }

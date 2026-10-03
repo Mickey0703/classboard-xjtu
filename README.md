@@ -6,6 +6,8 @@ ID 2601 班务看板。访客可查看首页、班级日程和通知；班委经
 
 iOS 添加到主屏幕使用 `public/apple-touch-icon.png`（180 × 180、不透明正方形班徽）；`public/site.webmanifest` 提供网页 App 名称及 192 / 512 像素图标。更新图标后，已添加的旧图标可能需要移除，再从 Safari 添加到主屏幕。
 
+所有页面的页脚提供“添加到主屏幕”操作说明，默认展开 iPhone / iPad 的 Safari 步骤，Android 用户可展开 Chrome 步骤。文案参考 [Apple 官方指南](https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/26/ios/26)和 [Chrome 创建快捷方式](https://support.google.com/chrome/answer/15085120?co=GENIE.Platform%3DAndroid&hl=zh-Hans)、[安装 Web 应用](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=zh-Hans)说明，兼顾新旧菜单名称及应用内浏览器入口。
+
 展示标题使用自托管 Noto Serif SC 衬线字体子集，正文与操作控件保持系统无衬线字体。字形范围与开源许可见 `public/fonts/README.md`；新增固定展示标题时需同步更新字形子集。
 
 辅助文字最小字号为 12 px，常读说明与正文为 13–15 px。大号通知计数、日期与温度数字使用同款衬线字体，并包含完整数字、负号和小数点字形。

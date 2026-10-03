@@ -64,7 +64,25 @@ h1, h2, h3 { color: var(--text); }
 .admin-link { display: flex; align-items: center; gap: 7px; padding: 10px 14px; border: 1px solid #ffffff45; border-radius: 9px; background: transparent; color: #fff; font-size: 12px; font-weight: 600; margin-left: 18px; }
 .admin-link:hover { background: #ffffff12; }
 .main-wrap { width: 100%; max-width: 1320px; margin: auto; padding: 36px 40px 40px; }
-.site-footer { max-width: 1240px; margin: 4px auto 0; padding: 24px 0 30px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 15px; font-size: 12px; letter-spacing: .07em; color: #818795; }
+.site-footer { max-width: 1240px; margin: 4px auto 0; padding: 24px 0 30px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 24px; font-size: 12px; color: var(--muted); }
+.footer-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; letter-spacing: .07em; }
+.home-screen-guide { letter-spacing: 0; }
+.home-screen-heading { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
+.home-screen-heading > svg { flex: none; color: var(--red); margin-top: 2px; }
+.home-screen-heading h2 { font-family: inherit; font-size: 16px; margin: 0 0 5px; }
+.home-screen-heading p { margin: 0; font-size: 13px; line-height: 1.7; }
+.home-screen-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.home-screen-options details { min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.home-screen-options summary { padding: 14px 16px; min-height: 48px; color: var(--navy); font-size: 14px; font-weight: 600; cursor: pointer; }
+.home-screen-options summary:focus-visible { outline: 3px solid #dca870; outline-offset: 3px; border-radius: 10px; }
+.home-screen-options ol { margin: 0 16px 12px; padding-left: 22px; color: #586475; font-size: 13px; line-height: 1.9; }
+.home-screen-options li + li { margin-top: 8px; }
+.home-screen-options li > svg { display: inline-block; vertical-align: -3px; margin: 0 3px; }
+.home-screen-options strong { color: var(--text); font-weight: 600; }
+.home-screen-options .home-screen-tip { margin: 0 16px 8px; line-height: 1.8; }
+.home-screen-options a { display: inline-flex; align-items: center; min-height: 44px; margin: 0 16px 8px; color: var(--red); text-underline-offset: 3px; }
+.home-screen-note { margin: 14px 0 0; line-height: 1.8; font-size: 12px; }
+@media (max-width: 760px) { .home-screen-options { grid-template-columns: minmax(0, 1fr); } }
 .page-stack { display: flex; flex-direction: column; gap: 22px; }
 .eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .14em; }
 .section-kicker { color: #8b91a0; font-size: 12px; font-weight: 800; letter-spacing: .15em; }
