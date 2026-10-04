@@ -34,6 +34,15 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
 .admin-link:hover { background: var(--subtle); }
 .theme-toggle { width: 42px; height: 42px; display: grid; place-items: center; flex: none; padding: 0; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 8px; }
 .theme-toggle:hover { color: var(--red); background: var(--subtle); }
+.theme-controls { display: flex; align-items: center; gap: 2px; flex: none; }
+.theme-menu { position: relative; }
+.theme-menu summary { display: grid; place-items: center; width: 24px; min-height: 42px; cursor: pointer; list-style: none; color: var(--muted); border-radius: 6px; }
+.theme-menu summary::-webkit-details-marker { display: none; }
+.theme-menu summary:focus-visible { outline: 3px solid #b06935; outline-offset: 2px; }
+.theme-options { position: absolute; right: 0; top: calc(100% + 8px); min-width: 140px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 28px #08254d20; z-index: 1; }
+.theme-options button { display: block; width: 100%; min-height: 44px; padding: 9px 12px; border: 0; border-radius: 5px; background: transparent; text-align: left; color: var(--text); font-size: 14px; }
+.theme-options button[aria-pressed='true'] { background: var(--accent-soft); color: var(--red); }
+.theme-options button:hover { background: var(--subtle); }
 .main-wrap { max-width: 1280px; padding: 34px 32px 36px; }
 .page-stack { gap: 24px; }
 .welcome { --welcome-title-size: 30px; --welcome-emblem-height: calc(var(--welcome-title-size) * 1.45 + 14px * 1.8 + 8px); align-items: flex-start; min-height: 0; padding: 0; gap: 24px; border-radius: 0; background: none; color: var(--text); box-shadow: none; overflow: visible; }
