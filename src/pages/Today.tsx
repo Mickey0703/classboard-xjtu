@@ -1,5 +1,5 @@
 import { ArrowRight, Bell, CalendarDays, CheckCircle2, ClipboardList, CloudSun, Pin, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RecipientStatus, Snapshot } from '../domain/types';
 import type { Page } from '../components/Shell';
 import { getEventStatus } from '../domain/events';
@@ -12,6 +12,20 @@ const weight = { urgent: 3, important: 2, normal: 1 };
 
 export default function Today({ snapshot, now, onNavigate, receipts = null, receiptStatus = 'guest' }: { snapshot: Snapshot; now: Date; onNavigate: (page: Page) => void; receipts?: RecipientStatus[] | null; receiptStatus?: 'loading' | 'ready' | 'guest' | 'error' }) {
   const [weather, setWeather] = useState<WeatherResult | null>(null);
+  const messageRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const text = messageRef.current;
+    if (!text) return;
+    const alignEmblem = () => {
+      const height = text.getBoundingClientRect().height;
+      if (height > 0) text.parentElement?.style.setProperty('--welcome-emblem-height', `${height}px`);
+    };
+    alignEmblem();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(alignEmblem);
+    observer.observe(text);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => { let active = true; void getXianWeather().then(result => { if (active) setWeather(result); }); return () => { active = false; }; }, []);
   const upcoming = snapshot.events.filter(e => !e.done && Date.parse(e.dueAt) >= now.getTime()).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const notices = [...snapshot.notifications].sort((a, b) => Number(b.pinned) - Number(a.pinned) || weight[b.priority] - weight[a.priority] || b.publishedAt.localeCompare(a.publishedAt));
@@ -21,13 +35,12 @@ export default function Today({ snapshot, now, onNavigate, receipts = null, rece
 
   return <div className="page-stack home-page">
     <section className="welcome">
-      <div className="welcome-copy"><span className="eyebrow"><CalendarDays size={14}/> {dayFmt.format(now)}</span><h1>今天的班务</h1><p>及时知悉，共同完成。<br className="mobile-break"/>班级的重要消息与近期安排，都在这里。</p><div className="welcome-actions"><button onClick={() => onNavigate('notifications')}>查看全部通知 <ArrowRight size={16}/></button><button onClick={() => onNavigate('schedule')}>查看日程</button></div></div>
-      <a className="identity-strip" href="/class-emblem.png" target="_blank" rel="noreferrer" aria-label="查看 ID 2601 完整班徽"><div className="identity-art"><ClassEmblem/></div><div className="identity-copy"><strong>ID 2601</strong><span>XJTU–POLIMI JOINT SCHOOL</span></div></a>
+      <div className="welcome-copy"><span className="eyebrow"><CalendarDays size={14}/> {dayFmt.format(now)}</span><div className="welcome-message"><div className="welcome-message-copy" ref={messageRef}><h1>今天的班务</h1><p>班级的重要消息与近期安排，都在这里。</p></div><a className="identity-strip" href="/class-emblem.png" target="_blank" rel="noreferrer" aria-label="查看 ID 2601 完整班徽"><div className="identity-art"><ClassEmblem/></div><div className="identity-copy"><strong>ID 2601</strong><span>XJTU–POLIMI JOINT SCHOOL</span></div></a></div><div className="welcome-actions"><button onClick={() => onNavigate('notifications')}>查看全部通知 <ArrowRight size={16}/></button><button onClick={() => onNavigate('schedule')}>查看日程</button></div></div>
     </section>
     {snapshot.demo && <div className="demo-banner"><Sparkles size={14}/> 演示数据 · 正式通知与事项由班委发布</div>}
     <div className="summary-strip">
+      <div className="personal-metric" role="status" aria-label="未完成待办"><span className="metric-icon"><ClipboardList size={19}/></span><span className="metric-copy"><small>未完成待办</small><strong>{receipts === null ? '—' : pendingTasks}<em>项</em></strong>{receiptStatus === 'guest' ? <a className="metric-hint" href="/api/member/login">登录后查看</a> : receiptStatus === 'loading' ? <span className="metric-hint">正在读取…</span> : receiptStatus === 'error' ? <span className="metric-hint">暂时无法更新</span> : null}</span></div>
       <div><span className="metric-icon"><Bell size={19}/></span><span className="metric-copy"><small>已发布通知</small><strong>{snapshot.notifications.length}<em>条</em></strong></span></div>
-      <div role="status" aria-label="未完成待办"><span className="metric-icon"><ClipboardList size={19}/></span><span className="metric-copy"><small>未完成待办</small><strong>{receipts === null ? '—' : pendingTasks}<em>项</em></strong>{receiptStatus === 'guest' ? <a className="metric-hint" href="/api/member/login">登录后查看</a> : receiptStatus === 'loading' ? <span className="metric-hint">正在读取…</span> : receiptStatus === 'error' ? <span className="metric-hint">暂时无法更新</span> : null}</span></div>
       <div><span className="metric-icon"><CheckCircle2 size={19}/></span><span className="metric-copy"><small>近期日程</small><strong>{upcoming.length}<em>件</em></strong></span></div>
     </div>
     {important && <section className="home-notice"><div className="home-notice-symbol"><Bell size={22}/></div><div className="home-notice-copy"><span className="home-notice-label">{important.priority === 'urgent' ? '紧急通知' : '重要通知'}{important.pinned && <><span className="meta-divider"/><Pin size={11}/> 置顶</>}</span><h2>{important.title}</h2><p>{important.body}</p></div><button onClick={() => onNavigate('notifications')}>查看通知 <ArrowRight size={15}/></button></section>}

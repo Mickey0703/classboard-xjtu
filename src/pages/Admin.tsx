@@ -31,7 +31,7 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
   return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS MANAGEMENT</span><h1>班委管理</h1><p>发布通知，维护成员和班级事项</p></div><LockKeyhole className="title-illustration" size={52}/></div><button className="text-action" onClick={onBack}><ArrowLeft size={16}/> 返回首页</button>
     {checking ? <div className="state-card">正在检查班委登录状态…</div> : !email ? <div className="state-card"><h2>班委登录</h2><p>只有班委邮箱通过验证后才能修改班务资料。</p><a className="primary-button" href="/api/admin/login">使用班委邮箱登录</a></div> : <>
       <div className="demo-banner">当前班委：{email} · 修改会同步显示给所有访问者</div>
-      <nav className="admin-tabs" aria-label="班委管理菜单">{tabs.map(({ id, label }) => <button key={id} className={tab === id ? 'selected' : ''} aria-pressed={tab === id} onClick={() => { setTab(id); setError(''); setSuccess(''); }}>{label}</button>)}</nav>
+      <div className="admin-workspace"><nav className="admin-tabs" aria-label="班委管理菜单">{tabs.map(({ id, label }) => <button key={id} className={tab === id ? 'selected' : ''} aria-pressed={tab === id} onClick={() => { setTab(id); setError(''); setSuccess(''); }}>{label}</button>)}</nav>
       <section className="card admin-card">
         {(tab === 'notifications' || tab === 'notification-records') && <NotificationAdmin onPublished={onSaved} view={tab === 'notifications' ? 'compose' : 'records'} onViewChange={view => setTab(view === 'compose' ? 'notifications' : 'notification-records')}/>}
         {tab === 'members' && <MembersAdmin/>}
@@ -42,7 +42,7 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
         </div><p>{error && <span className="form-error">{error}</span>}{success && <span className="form-success">{success}</span>}</p><button className="primary-button" type="submit">保存事项</button>{event.id && <button type="button" className="outline-button" onClick={() => setEvent(blankEvent)}>取消编辑</button>}</form>
         <div className="admin-list">{snapshot?.events.map(item => <div className="admin-row" key={item.id}><div><strong>{item.title}</strong><small>{item.category} · 截止 {item.dueAt.slice(0, 16).replace('T', ' ')}</small></div><div><button onClick={() => setEvent(item)}>编辑</button><button aria-label={`删除${item.title}`} onClick={() => { if (confirm(`确定删除“${item.title}”？`)) void action('events', 'DELETE', { id: item.id }, '删除事项'); }}><Trash2 size={16}/></button></div></div>)}</div></>}
         {tab === 'settings' && <><div className="section-head"><h2>网站设置</h2></div><form onSubmit={e => { e.preventDefault(); void action('site-settings', 'PUT', { className }, '保存班级名称'); }}><div className="form-grid"><label className="field wide">班级名称<input required maxLength={60} value={className} onChange={e => setClassName(e.target.value)} placeholder="例如：ID 2601 班务"/></label></div><p>{error && <span className="form-error">{error}</span>}{success && <span className="form-success">{success}</span>}</p><button className="primary-button" type="submit">保存班级名称</button></form></>}
-      </section>
+      </section></div>
     </>}
   </div>;
 }

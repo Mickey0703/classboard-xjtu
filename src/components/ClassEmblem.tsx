@@ -6,8 +6,9 @@ export default function ClassEmblem() {
   return <svg className="class-emblem" viewBox="1190 369 2965 2847" role="img" aria-label="ID 2601 班徽" focusable="false">
     <defs>
       <filter id={filterId} colorInterpolationFilters="sRGB">
-        {/* Original navy has red=8; white has red=255. Preserve antialiased edges. */}
-        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.032388664 0 0 0 -0.032388664" result="emblem-alpha"/>
+        {/* Background R=8 is below the R=16 cutoff, leaving room for mobile
+            resampling/filter rounding while keeping white and soft edges. */}
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.066945607 0 0 0 -0.066945607" result="emblem-alpha"/>
         <feFlood floodColor="currentColor" result="emblem-colour"/>
         <feComposite in="emblem-colour" in2="emblem-alpha" operator="in"/>
       </filter>

@@ -1,4 +1,5 @@
-import { Bell, ClipboardList, Home, LockKeyhole } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, ClipboardList, Home, LockKeyhole, Moon, Sun } from 'lucide-react';
 import ClassEmblem from './ClassEmblem';
 import HomeScreenGuide from './HomeScreenGuide';
 
@@ -10,6 +11,22 @@ const tabs: { id: Page; label: string; icon: typeof Home }[] = [
 ];
 
 export default function Shell({ page, setPage, brandName, children }: { page: Page; setPage: (p: Page) => void; brandName?: string; children: React.ReactNode }) {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('classboard-theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch { /* Reading preferences must not prevent viewing the site. */ }
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#1e2733' : '#fdfefe');
+  }, [theme]);
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('classboard-theme', next); } catch { /* Still switch for this visit. */ }
+  };
   return <div className="app-shell">
     <header className="topbar"><div className="topbar-inner">
       <div className="brand-mark"><ClassEmblem/></div>
@@ -18,6 +35,7 @@ export default function Shell({ page, setPage, brandName, children }: { page: Pa
         <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(id)} aria-current={page === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>
       )}</nav>
       <button className="admin-link" onClick={() => setPage('admin')} aria-label="班委管理"><LockKeyhole size={16}/><span>班委管理</span></button>
+      <button className="theme-toggle" onClick={toggleTheme} aria-label={`切换到${theme === 'dark' ? '浅色' : '深色'}模式`} title={`切换到${theme === 'dark' ? '浅色' : '深色'}模式`}>{theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}</button>
     </div></header>
     <main className="main-wrap">{children}</main>
     <footer className="site-footer">{page === 'today' && <HomeScreenGuide/>}<div className="footer-meta"><span>ID 2601 · XJTU–POLIMI</span><span>让重要的事，有处可寻。</span></div></footer>
