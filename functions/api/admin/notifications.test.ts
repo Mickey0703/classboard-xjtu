@@ -21,6 +21,13 @@ function database(options: { notification?: Record<string, unknown> | null; memb
 }
 
 describe('notification publishing', () => {
+  it('rejects invalid attachment positions, duplicates and more than five references', async () => {
+    for (const attachments of [[{ id: 'f1', position: 99 }], [{ id: 'f1', position: 0 }, { id: 'f1', position: 0 }], Array.from({ length: 6 }, (_, i) => ({ id: `f${i}`, position: 0 })), 'bad']) {
+      const db = database();
+      expect((await onRequestPost(context(db, 'POST', { ...draft, attachments }))).status).toBe(400);
+      expect(db.prepare).not.toHaveBeenCalled();
+    }
+  });
   it('validates the proof requirement as a task-only boolean', async () => {
     for (const value of [{ ...draft, requiresCompletionProof: 'true' }, { ...draft, kind: 'notice', dueAt: null, requiresCompletionProof: true }]) {
       const db = database();

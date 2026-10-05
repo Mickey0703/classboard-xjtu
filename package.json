@@ -15,6 +15,7 @@
     "db:recipient-selection": "wrangler d1 execute DB --local --file=db/migrations/004_selected_recipients.sql",
     "db:photos": "wrangler d1 execute DB --local --file=db/migrations/005_notification_photos.sql",
     "db:completion-proof": "wrangler d1 execute DB --local --file=db/migrations/006_required_completion_proof.sql",
+    "db:files": "wrangler d1 execute DB --local --file=db/migrations/007_notification_files.sql",
     "db:notification-demo": "wrangler d1 execute DB --local --file=db/demo-notifications.sql",
     "test": "vitest run",
     "test:e2e": "playwright test"

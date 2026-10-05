@@ -11,7 +11,7 @@ import { onRequestGet as adminPhoto } from './completion-photo';
 
 function setup() {
   const sqlite = new DatabaseSync(':memory:');
-  for (const path of ['db/schema.sql', 'db/migrations/002_notifications.sql', 'db/migrations/003_publish_recipients_trigger.sql', 'db/migrations/004_selected_recipients.sql', 'db/migrations/005_notification_photos.sql', 'db/migrations/006_required_completion_proof.sql']) {
+  for (const path of ['db/schema.sql', 'db/migrations/002_notifications.sql', 'db/migrations/003_publish_recipients_trigger.sql', 'db/migrations/004_selected_recipients.sql', 'db/migrations/005_notification_photos.sql', 'db/migrations/006_required_completion_proof.sql', 'db/migrations/007_notification_files.sql']) {
     sqlite.exec(readFileSync(path, 'utf8'));
   }
   const prepare = (sql: string) => {

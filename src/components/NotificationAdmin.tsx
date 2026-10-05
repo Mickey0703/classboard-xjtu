@@ -3,16 +3,19 @@ import type { ClassMember, NotificationKind, NotificationPriority, NotificationS
 import { movePhotoPositions, type Photo } from '../domain/photos';
 import PhotoUpload from './PhotoUpload';
 import { NotificationBody, PhotoGallery } from './PhotoViewer';
+import FileUpload from './FileUpload';
+import type { Attachment } from '../domain/attachments';
 
 interface AdminNotification {
   id: string; kind: NotificationKind; priority: NotificationPriority; title: string; body: string;
   due_at: string | null; pinned: number; status: NotificationStatus; published_at: string | null;
   recipientEmails?: string[] | null;
   photos?: Photo[];
+  attachments?: Attachment[];
   requiresCompletionProof?: boolean;
 }
 interface Stats { total: number; acknowledged: number; completed: number; notAcknowledged: { email: string; displayName: string }[]; notCompleted: { email: string; displayName: string }[]; completedRecipients?: { email: string; displayName: string; completedAt: string; photos: Photo[] }[] }
-const blank = { kind: 'notice' as NotificationKind, priority: 'normal' as NotificationPriority, title: '', body: '', dueAt: null as string | null, pinned: false, photos: [] as Photo[], requiresCompletionProof: false };
+const blank = { kind: 'notice' as NotificationKind, priority: 'normal' as NotificationPriority, title: '', body: '', dueAt: null as string | null, pinned: false, photos: [] as Photo[], attachments: [] as Attachment[], requiresCompletionProof: false };
 const completedTime = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short' });
 export type NotificationAdminView = 'compose' | 'records';
 
@@ -24,6 +27,8 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const processing = uploading || uploadingFiles;
   const insertionPoint = useRef(0);
   const bodyInput = useRef<HTMLTextAreaElement>(null);
   const [form, setForm] = useState({ ...blank, id: '' });
@@ -60,7 +65,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     return response.json() as Promise<{ id: string; status: NotificationStatus }>;
   };
   const save = async () => {
-    if (busy || uploading) return;
+    if (busy || processing) return;
     setError(''); setMessage('');
     if (!membersLoaded) { setError('成员名单尚未加载，请稍后重试'); return; }
     if (!recipientEmails.length) { setError('请至少选择一位收件人'); return; }
@@ -71,7 +76,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     finally { setBusy(false); }
   };
   const transition = async (id: string, action: 'publish' | 'withdraw') => {
-    if (busy || uploading) return;
+    if (busy || processing) return;
     setBusy(true);
     try {
     setError(''); setMessage('');
@@ -95,9 +100,11 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
       <label className="field">类型<select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value as NotificationKind, dueAt: e.target.value === 'notice' ? null : form.dueAt, requiresCompletionProof: e.target.value === 'task' && form.requiresCompletionProof })}><option value="notice">公告</option><option value="task">待办</option></select></label>
       <label className="field">重要程度<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as NotificationPriority })}><option value="normal">普通</option><option value="important">重要</option><option value="urgent">紧急</option></select></label>
       <label className="field wide">通知标题<input required maxLength={120} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}/></label>
-      <label className="field wide">通知正文<textarea ref={bodyInput} required disabled={busy || uploading} rows={6} maxLength={5000} value={form.body} onSelect={e => { insertionPoint.current = e.currentTarget.selectionStart; }} onChange={e => { const body = e.target.value; insertionPoint.current = e.target.selectionStart; setForm({ ...form, body, photos: movePhotoPositions(form.photos, form.body, body) }); }}/></label>
-      <div className="field wide"><PhotoUpload photos={form.photos} disabled={busy} onBusy={value => { if (value) insertionPoint.current = bodyInput.current?.selectionStart ?? insertionPoint.current; setUploading(value); }} onChange={photos => setForm(previous => ({ ...previous, photos: photos.map(photo => photo.position === undefined ? { ...photo, position: Math.min(previous.body.length, insertionPoint.current) } : photo) }))}/><small className="muted">先在正文中点击插入位置，再添加照片。照片将与通知正文一起公开展示。</small>
-        {form.photos.length > 0 && <section className="notice-preview" aria-label="正文预览"><h3>正文预览</h3><NotificationBody body={form.body} photos={form.photos}/></section>}
+      <label className="field wide">通知正文<textarea ref={bodyInput} required disabled={busy || processing} rows={6} maxLength={5000} value={form.body} onSelect={e => { insertionPoint.current = e.currentTarget.selectionStart; }} onChange={e => { const body = e.target.value; insertionPoint.current = e.target.selectionStart; setForm({ ...form, body, photos: movePhotoPositions(form.photos, form.body, body), attachments: movePhotoPositions(form.attachments, form.body, body) }); }}/></label>
+      <div className="field wide"><PhotoUpload photos={form.photos} disabled={busy || uploadingFiles} onBusy={value => { if (value) insertionPoint.current = bodyInput.current?.selectionStart ?? insertionPoint.current; setUploading(value); }} onChange={photos => setForm(previous => ({ ...previous, photos: photos.map(photo => photo.position === undefined ? { ...photo, position: Math.min(previous.body.length, insertionPoint.current) } : photo) }))}/>
+        <FileUpload attachments={form.attachments} disabled={busy || uploading} onBusy={value => { if (value) insertionPoint.current = bodyInput.current?.selectionStart ?? insertionPoint.current; setUploadingFiles(value); }} onChange={attachments => setForm(previous => ({ ...previous, attachments: attachments.map(file => file.position === undefined ? { ...file, position: Math.min(previous.body.length, insertionPoint.current) } : file) }))}/>
+        <small className="muted">先在正文中点击插入位置，再添加照片或上传文件。内容将随通知一起公开展示。</small>
+        {(form.photos.length > 0 || form.attachments.length > 0) && <section className="notice-preview" aria-label="正文预览"><h3>正文预览</h3><NotificationBody body={form.body} photos={form.photos} attachments={form.attachments}/></section>}
       </div>
       <div className="field wide recipient-field"><span>收件人</span>
         <div className="recipient-toolbar"><span role="status">{membersLoaded ? `已选 ${recipientEmails.length} / ${members.length} 人` : '正在加载成员…'}</span><div><button className="outline-button" type="button" disabled={!membersLoaded || busy} onClick={() => setRecipientEmails(members.map(member => member.email))}>全选</button><button className="outline-button" type="button" disabled={busy} onClick={() => setRecipientEmails([])}>清空</button></div></div>
@@ -113,12 +120,12 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
       {form.kind === 'task' && <label className="field">截止时间<input type="datetime-local" required value={form.dueAt?.slice(0,16) ?? ''} onChange={e => setForm({ ...form, dueAt: e.target.value ? `${e.target.value}:00+08:00` : null })}/></label>}
       {form.kind === 'task' && <label className="field checkbox-field"><input type="checkbox" disabled={busy} checked={form.requiresCompletionProof} onChange={e => setForm({ ...form, requiresCompletionProof: e.target.checked })}/> 须提交完成凭据</label>}
       <label className="field checkbox-field"><input type="checkbox" checked={form.pinned} onChange={e => setForm({ ...form, pinned: e.target.checked })}/> 置顶显示</label>
-    </div><button className="primary-button" type="submit" disabled={busy || uploading || !membersLoaded || !members.length}>{busy ? '正在保存…' : '保存草稿'}</button>{form.id && <button className="outline-button" type="button" disabled={busy || uploading} onClick={reset}>取消编辑</button>}</form>
+    </div><button className="primary-button" type="submit" disabled={busy || processing || !membersLoaded || !members.length}>{busy ? '正在保存…' : '保存草稿'}</button>{form.id && <button className="outline-button" type="button" disabled={busy || processing} onClick={reset}>取消编辑</button>}</form>
     {view === 'records' && <><div className="notification-records-list">{items.length ? items.map(item => <div className="admin-notice-row" key={item.id}>
       <div><strong>{item.title}</strong><small>{item.kind === 'task' ? '待办' : '公告'} · {item.priority === 'urgent' ? '紧急' : item.priority === 'important' ? '重要' : '普通'} · {item.status === 'draft' ? '草稿' : item.status === 'published' ? '已发布' : '已撤回'}</small>{item.status === 'draft' && <small>收件人：{item.recipientEmails == null ? '发布时全部活跃成员' : `${item.recipientEmails.length} 人`}</small>}</div>
       <div className="admin-notice-actions">{item.status === 'draft' ? <>
-        <button disabled={!membersLoaded || busy || uploading} onClick={() => { setForm({ id: item.id, kind: item.kind, priority: item.priority, title: item.title, body: item.body, photos: item.photos ?? [], dueAt: item.due_at, pinned: Boolean(item.pinned), requiresCompletionProof: Boolean(item.requiresCompletionProof) }); insertionPoint.current = item.body.length; setRecipientEmails(item.recipientEmails ?? members.map(member => member.email)); setQuery(''); setError(''); setMessage(''); onViewChange('compose'); }}>编辑</button>
-        <button disabled={busy || uploading || form.id === item.id} title={form.id === item.id ? '请先保存或取消编辑，再发布通知' : undefined} onClick={() => void transition(item.id, 'publish')}>发布通知</button>
+        <button disabled={!membersLoaded || busy || processing} onClick={() => { setForm({ id: item.id, kind: item.kind, priority: item.priority, title: item.title, body: item.body, photos: item.photos ?? [], attachments: item.attachments ?? [], dueAt: item.due_at, pinned: Boolean(item.pinned), requiresCompletionProof: Boolean(item.requiresCompletionProof) }); insertionPoint.current = item.body.length; setRecipientEmails(item.recipientEmails ?? members.map(member => member.email)); setQuery(''); setError(''); setMessage(''); onViewChange('compose'); }}>编辑</button>
+        <button disabled={busy || processing || form.id === item.id} title={form.id === item.id ? '请先保存或取消编辑，再发布通知' : undefined} onClick={() => void transition(item.id, 'publish')}>发布通知</button>
       </> : item.status === 'published' ? <><button onClick={() => void loadStats(item.id).catch(cause => setError(cause instanceof Error ? cause.message : '统计暂不可用'))}>查看统计</button><button disabled={busy} onClick={() => void transition(item.id, 'withdraw')}>撤回</button></> : null}</div>
     </div>) : <p className="empty-note">还没有通知草稿</p>}</div>
     {stats && <section className="notice-stats"><h3>传达统计</h3><p>已知悉 {stats.acknowledged}/{stats.total}{statsKind === 'task' && <>　已完成 {stats.completed}/{stats.total}</>}</p><div className="stats-lists"><div><strong>尚未知悉</strong>{stats.notAcknowledged.length ? stats.notAcknowledged.map(m => <span key={m.email}>{m.displayName} · {m.email}</span>) : <small>全部已知悉</small>}</div>{statsKind === 'task' && <div><strong>尚未完成</strong>{stats.notCompleted.length ? stats.notCompleted.map(m => <span key={m.email}>{m.displayName} · {m.email}</span>) : <small>全部已完成</small>}</div>}</div><small>通知编号：{statsId}</small></section>}

@@ -1,0 +1,57 @@
+import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+
+test('committee uploads an inline file, students download identical bytes and withdrawal disables the link', async ({ page, request, browser }) => {
+  const title = `文件通知 ${Date.now()}`;
+  const payload = Buffer.from('报名表模板\n姓名,邮箱\n', 'utf8');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.context().addCookies([{ name: 'local_admin', value: 'test-token', domain: '127.0.0.1', path: '/' }]);
+  await page.goto('/?view=admin');
+  await page.getByLabel('通知标题').fill(title);
+  await page.getByLabel('通知正文').fill('请下载模板。填写后提交。');
+  await page.getByLabel('通知正文').evaluate((element: HTMLTextAreaElement) => { element.focus(); element.setSelectionRange(6, 6); });
+  await page.getByLabel('上传文件', { exact: true }).setInputFiles({ name: '报名模板.csv', mimeType: 'text/csv', buffer: payload });
+  await expect(page.getByRole('link', { name: /报名模板.csv/ })).toBeVisible();
+  await page.screenshot({ path: 'test-results/file-upload-light-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: '保存草稿' }).click();
+  const row = page.locator('.admin-notice-row').filter({ hasText: title });
+  await expect(row).toBeVisible();
+  await page.reload();
+  const menus = page.getByRole('navigation', { name: '班委管理菜单' });
+  await menus.getByRole('button', { name: '通知记录', exact: true }).click();
+  await row.getByRole('button', { name: '编辑', exact: true }).click();
+  await expect(page.getByRole('link', { name: /报名模板.csv/ })).toBeVisible();
+  await page.getByRole('button', { name: '删除文件 报名模板.csv' }).click();
+  await expect(page.getByRole('link', { name: /报名模板.csv/ })).toHaveCount(0);
+  await page.getByRole('button', { name: '取消编辑' }).click();
+  await menus.getByRole('button', { name: '通知记录', exact: true }).click();
+  const draftRows = await (await page.request.get('/api/admin/notifications')).json();
+  const draft = draftRows.find((item: { title: string }) => item.title === title);
+  const id = draft.id as string;
+  expect(draft.attachments[0].position).toBe(6);
+  const anonymous = await browser.newContext();
+  try {
+    expect((await anonymous.request.get(`http://127.0.0.1:8788/api/admin/notification-file?id=${draft.attachments[0].id}`)).status()).toBe(403);
+    expect((await anonymous.request.get(`http://127.0.0.1:8788/api/notification-file?notificationId=${id}&id=${draft.attachments[0].id}`)).status()).toBe(404);
+  } finally { await anonymous.close(); }
+  await row.getByRole('button', { name: '发布通知' }).click();
+  await expect(row.getByText(/已发布/)).toBeVisible();
+  await page.goto('/?view=notifications');
+  const card = page.locator('.notice-card').filter({ hasText: title });
+  const attachment = card.getByRole('link', { name: /报名模板.csv/ });
+  await expect(attachment).toBeVisible();
+  const href = await attachment.getAttribute('href');
+  const downloadEvent = page.waitForEvent('download');
+  await attachment.click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe('报名模板.csv');
+  expect(await readFile((await download.path())!)).toEqual(payload);
+  await page.getByRole('button', { name: '切换到深色模式', exact: true }).click();
+  await page.screenshot({ path: 'test-results/file-download-dark-mobile.png', fullPage: true, animations: 'disabled' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.goto('/?view=admin');
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
+  await row.getByRole('button', { name: '撤回' }).click();
+  await expect(row.getByText(/已撤回/)).toBeVisible();
+  expect((await request.get(href!)).status()).toBe(404);
+});

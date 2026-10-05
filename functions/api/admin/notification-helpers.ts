@@ -1,12 +1,14 @@
 import type { NotificationKind, NotificationPriority } from '../../../src/domain/types';
 import { shanghaiTimestamp } from './validate';
 import { validPhotos, type Photo } from '../../../src/domain/photos';
+import { validAttachmentRefs, type AttachmentRef } from '../../../src/domain/attachments';
 
 export interface NotificationInput {
   id?: string; kind: NotificationKind; priority: NotificationPriority;
   title: string; body: string; dueAt: string | null; pinned: boolean;
   recipientEmails?: string[];
   photos?: Photo[];
+  attachments?: AttachmentRef[];
   requiresCompletionProof?: boolean;
 }
 
@@ -17,6 +19,7 @@ export function validNotification(value: unknown): value is NotificationInput {
     typeof n.title === 'string' && n.title.trim().length > 0 && n.title.length <= 120 &&
     typeof n.body === 'string' && n.body.trim().length > 0 && n.body.length <= 5000 &&
     (n.photos === undefined || validPhotos(n.photos, n.body.length)) &&
+    (n.attachments === undefined || validAttachmentRefs(n.attachments, n.body.length)) &&
     (n.requiresCompletionProof === undefined || (typeof n.requiresCompletionProof === 'boolean' && (n.kind === 'task' || !n.requiresCompletionProof))) &&
     typeof n.pinned === 'boolean' && (n.kind === 'task' ? shanghaiTimestamp(n.dueAt) : n.dueAt === null) &&
     (n.recipientEmails === undefined || (Array.isArray(n.recipientEmails) && n.recipientEmails.length <= 500 && n.recipientEmails.every(email => normalizeEmail(email) !== null)));

@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Photo } from '../domain/photos';
+import { FileDown } from 'lucide-react';
+import { fileSizeLabel, type Attachment } from '../domain/attachments';
 
 export function Modal({ title, onClose, busy = false, children }: { title: string; onClose: () => void; busy?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -24,12 +26,13 @@ export function PhotoGallery({ photos, label = '完成照片' }: { photos: Photo
   return <div className="photo-gallery">{photos.map((photo, index) => <PhotoButton key={photo.id} photo={photo} label={`${label} ${index + 1}`}/>)}</div>;
 }
 
-export function NotificationBody({ body, photos = [] }: { body: string; photos?: Photo[] }) {
+export function NotificationBody({ body, photos = [], attachments = [] }: { body: string; photos?: Photo[]; attachments?: Attachment[] }) {
   const parts: ReactNode[] = [];
   let cursor = 0;
-  [...photos].sort((a, b) => (a.position ?? body.length) - (b.position ?? body.length)).forEach((photo, index) => {
-    const position = Math.max(cursor, Math.min(body.length, photo.position ?? body.length));
-    parts.push(<span key={`${photo.id}-text`}>{body.slice(cursor, position)}</span>, <PhotoButton key={photo.id} photo={photo} label={`通知照片 ${index + 1}`}/>);
+  const inserts = [...photos.map((photo, index) => ({ key: `photo-${photo.id}`, position: photo.position ?? body.length, node: <PhotoButton photo={photo} label={`通知照片 ${index + 1}`}/> })), ...attachments.map(file => ({ key: `file-${file.id}`, position: file.position, node: <a className="notice-attachment" href={file.url} download={file.name}><FileDown size={20} aria-hidden="true"/><span><strong>{file.name}</strong><small>{fileSizeLabel(file.size)} · 点击下载</small></span></a> }))];
+  inserts.sort((a, b) => a.position - b.position).forEach(insert => {
+    const position = Math.max(cursor, Math.min(body.length, insert.position));
+    parts.push(<span key={`${insert.key}-text`}>{body.slice(cursor, position)}</span>, <Fragment key={insert.key}>{insert.node}</Fragment>);
     cursor = position;
   });
   parts.push(<span key="end">{body.slice(cursor)}</span>);

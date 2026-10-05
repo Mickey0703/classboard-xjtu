@@ -1,4 +1,5 @@
 import type { Photo } from './photos';
+import type { Attachment } from './attachments';
 export interface EventItem {
   id: string; title: string; description: string; category: string;
   startAt: string; dueAt: string; done: boolean;
@@ -10,6 +11,7 @@ export interface NotificationItem {
   id: string; kind: NotificationKind; priority: NotificationPriority;
   title: string; body: string; dueAt: string | null; pinned: boolean; publishedAt: string;
   photos?: Photo[];
+  attachments?: Attachment[];
   requiresCompletionProof?: boolean;
 }
 export interface ClassMember { email: string; displayName: string; active: boolean }

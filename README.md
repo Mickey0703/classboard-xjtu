@@ -31,6 +31,7 @@ npm run db:notification-guards
 npm run db:recipient-selection
 npm run db:photos
 npm run db:completion-proof
+npm run db:files
 npm run db:demo
 npm run db:notification-demo
 npm run preview
@@ -68,6 +69,16 @@ npx playwright install chromium --only-shell
 
 启用凭据开关还需在迁移 005 之后执行一次 `npx wrangler d1 execute DB --remote --file=db/migrations/006_required_completion_proof.sql`，再部署代码。此迁移保留已有通知、照片和完成记录，已有通知的凭据要求默认为关闭。迁移 006 仅执行一次；本地使用 `npm run db:completion-proof`。
 
+### 通知文件附件
+
+撰写通知时在正文中点击插入位置，再选择“上传文件”。支持 PDF、Word、Excel、PPT、压缩包等文件，每条通知最多 5 个附件，每个最大 10 MB。等待上传完成后保存草稿，附件会保留在草稿中；可在发布前删除或重新上传。正文预览会在相应位置显示文件名、大小和下载入口。
+
+已发布通知的附件与通知正文一样公开可下载，不需要学生登录。草稿及尚未发布的文件只允许班委下载。删除附件后保存草稿，或撤回通知后，对应的公开下载入口不再可用。文件按原始字节保存，不压缩、不改变内容；下载后使用手机或电脑上对应的应用查看。
+
+附件使用现有 D1 数据库，按 512 KB 分块保存，每个文件最多 20 块，通知列表只返回文件信息，不包含文件字节。无需开通 R2 或增加绑定。上传后超过 7 天仍未被任何通知引用的文件，会在后续上传时清理；已被草稿、已发布或已撤回通知引用的文件保留。存储容量受现有 D1 套餐限制。分块与请求查询数量按 [D1 官方限制](https://developers.cloudflare.com/d1/platform/limits/)设置。
+
+已有网站需先执行一次 `npx wrangler d1 execute DB --remote --file=db/migrations/007_notification_files.sql`（在迁移 006 之后），再部署本次代码。迁移新增附件字段和文件表，保留原有通知、照片及回执；迁移 007 仅执行一次。本地使用 `npm run db:files`。
+
 ### 批量导入成员
 
 在班委管理的“成员”页选择 UTF-8 编码的 CSV / TSV 文件，或从 Excel 复制“姓名、邮箱”两列粘贴到“批量名单”。可参考 `db/roster.example.csv`，将真实名单保存在自己的本地文件中。页面显示待导入人数，点击“导入名单”后写入 Cloudflare D1。名单最多 500 人，文件最多 1 MB；姓名不能为空，邮箱必须有效且同一次导入不能重复。前后端均校验完整名单，错误名单不会部分写入。
@@ -79,7 +90,7 @@ npx playwright install chromium --only-shell
 ## Cloudflare 部署
 
 1. 创建 D1 数据库，将真实 `database_id` 写入 `wrangler.toml`。仓库中的全零 ID 仅供本地占位。
-2. 依次运行 `npx wrangler d1 execute DB --remote --file=db/schema.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/002_notifications.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/003_publish_recipients_trigger.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/004_selected_recipients.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/005_notification_photos.sql` 和 `npx wrangler d1 execute DB --remote --file=db/migrations/006_required_completion_proof.sql`。迁移 004、005、006 各仅执行一次。生产库不要运行演示脚本。旧本地数据库若有课程表，网站不会查询或展示它们；本次不删除既有数据。
+2. 依次运行 `npx wrangler d1 execute DB --remote --file=db/schema.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/002_notifications.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/003_publish_recipients_trigger.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/004_selected_recipients.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/005_notification_photos.sql`、`npx wrangler d1 execute DB --remote --file=db/migrations/006_required_completion_proof.sql` 和 `npx wrangler d1 execute DB --remote --file=db/migrations/007_notification_files.sql`。迁移 004、005、006、007 各仅执行一次。生产库不要运行演示脚本。旧本地数据库若有课程表，网站不会查询或展示它们；本次不删除既有数据。
 3. 创建 Pages 项目并连接仓库，构建命令 `npm run build`，输出目录 `dist`，将 D1 绑定名设为 `DB`。
 4. 为 `/api/admin/*` 配置班委 Access 应用，设置 `ACCESS_DOMAIN`、`ACCESS_AUD` 和逗号分隔的 `ADMIN_EMAILS`。
 5. 为 `/api/member/*` 配置另一 Access 应用，启用 [One-time PIN 邮箱登录](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)，策略只允许班级成员邮箱，并把其 Audience Tag 配为 `MEMBER_ACCESS_AUD`。网站中的成员名单也需与 Access 允许名单同步。

@@ -22,7 +22,7 @@ export function validPhotos(value: unknown, bodyLength?: number): value is Photo
 }
 
 // Keep insertion points attached to the surrounding text while editing.
-export function movePhotoPositions(photos: Photo[], before: string, after: string): Photo[] {
+export function movePhotoPositions<T extends { position?: number }>(photos: T[], before: string, after: string): T[] {
   let start = 0;
   while (start < before.length && start < after.length && before[start] === after[start]) start++;
   let tail = 0;

@@ -1,4 +1,17 @@
 /* Campus workspace: visual layer over the existing functional components. */
+.file-upload { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 12px; }
+.file-upload > button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.uploaded-files { list-style: none; margin: 0; padding: 0; width: 100%; }
+.uploaded-files li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.uploaded-files li > span { min-width: 0; overflow-wrap: anywhere; color: var(--text); font-size: 14px; }
+.uploaded-files small { display: block; color: var(--muted); font-weight: 400; }
+.uploaded-files button { flex: none; min-width: 44px; min-height: 44px; }
+.notice-attachment { display: flex; align-items: center; gap: 12px; padding: 14px; margin: 16px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--subtle); color: var(--text); text-decoration: none; white-space: normal; min-height: 56px; }
+.notice-attachment > svg { flex: none; color: var(--red); }
+.notice-attachment > span { min-width: 0; }
+.notice-attachment strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.notice-attachment small { color: var(--muted); font-size: 12px; }
+.notice-attachment:hover { border-color: var(--red); }
 :root {
   --red: #991e32; --red-dark: #791526; --navy: #08254d; --emblem-color: #08254d;
   --text: #202c3b; --muted: #526172; --border: #dce2e8;
