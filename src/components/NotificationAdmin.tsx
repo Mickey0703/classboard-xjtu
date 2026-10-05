@@ -21,6 +21,7 @@ export type NotificationAdminView = 'compose' | 'records';
 
 export default function NotificationAdmin({ onPublished, view, onViewChange }: { onPublished: () => Promise<void> | void; view: NotificationAdminView; onViewChange: (view: NotificationAdminView) => void }) {
   const [items, setItems] = useState<AdminNotification[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(true);
   const [members, setMembers] = useState<ClassMember[]>([]);
   const [membersLoaded, setMembersLoaded] = useState(false);
   const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
@@ -40,6 +41,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     const response = await fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' });
     if (!response.ok) throw Error('通知列表暂不可用');
     setItems(await response.json() as AdminNotification[]);
+    setRecordsLoading(false);
   };
   const loadStats = async (id: string) => {
     const response = await fetch(`/api/admin/notification-stats?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', cache: 'no-store' });
@@ -47,7 +49,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     setStats(await response.json() as Stats);
     setStatsId(id);
   };
-  useEffect(() => { void load().catch(cause => setError(cause instanceof Error ? cause.message : '通知列表暂不可用')); }, []);
+  useEffect(() => { void load().catch(cause => { setRecordsLoading(false); setError(cause instanceof Error ? cause.message : '通知列表暂不可用'); }); }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -120,7 +122,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
       {form.kind === 'task' && <label className="field checkbox-field"><input type="checkbox" disabled={busy} checked={form.requiresCompletionProof} onChange={e => setForm({ ...form, requiresCompletionProof: e.target.checked })}/> 须提交完成凭据</label>}
       <label className="field checkbox-field"><input type="checkbox" checked={form.pinned} onChange={e => setForm({ ...form, pinned: e.target.checked })}/> 置顶显示</label>
     </div><button className="primary-button" type="submit" disabled={busy || processing || !membersLoaded || !members.length}>{busy ? '正在保存…' : '保存草稿'}</button>{form.id && <button className="outline-button" type="button" disabled={busy || processing} onClick={reset}>取消编辑</button>}</form>
-    {view === 'records' && <><div className="notification-records-list">{items.length ? items.map(item => <article className="notification-record" key={item.id}><div className="admin-notice-row">
+    {view === 'records' && <>{recordsLoading && <p className="empty-note" role="status">正在加载通知记录…</p>}<div className="notification-records-list">{items.length ? items.map(item => <article className="notification-record" key={item.id}><div className="admin-notice-row">
       <div><strong>{item.title}</strong><small>{item.kind === 'task' ? '待办' : '公告'} · {item.priority === 'urgent' ? '紧急' : item.priority === 'important' ? '重要' : '普通'} · {item.status === 'draft' ? '草稿' : item.status === 'published' ? '已发布' : '已撤回'}</small>{item.status === 'draft' && <small>收件人：{item.recipientEmails == null ? '发布时全部活跃成员' : `${item.recipientEmails.length} 人`}</small>}</div>
       <div className="admin-notice-actions">{item.status === 'draft' ? <>
         <button disabled={!membersLoaded || busy || processing} onClick={() => { setForm({ id: item.id, kind: item.kind, priority: item.priority, title: item.title, body: item.body, photos: item.photos ?? [], attachments: item.attachments ?? [], dueAt: item.due_at, pinned: Boolean(item.pinned), requiresCompletionProof: Boolean(item.requiresCompletionProof) }); insertionPoint.current = item.body.length; setRecipientEmails(item.recipientEmails ?? members.map(member => member.email)); setQuery(''); setError(''); setMessage(''); onViewChange('compose'); }}>编辑</button>
@@ -128,6 +130,6 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
       </> : item.status === 'published' ? <><button onClick={() => void loadStats(item.id).catch(cause => setError(cause instanceof Error ? cause.message : '统计暂不可用'))}>查看统计</button><button disabled={busy} onClick={() => void transition(item.id, 'withdraw')}>撤回</button></> : null}</div>
     </div>
     {stats && statsId === item.id && item.status === 'published' && <section className="notice-stats"><h3>传达统计</h3><p>已知悉 {stats.acknowledged}/{stats.total}{item.kind === 'task' && <>　已完成 {stats.completed}/{stats.total}</>}</p><div className="stats-lists"><div><strong>尚未知悉</strong>{stats.notAcknowledged.length ? stats.notAcknowledged.map(m => <span key={m.email}>{m.displayName} · {m.email}</span>) : <small>全部已知悉</small>}</div>{item.kind === 'task' && <div><strong>尚未完成</strong>{stats.notCompleted.length ? stats.notCompleted.map(m => <span key={m.email}>{m.displayName} · {m.email}</span>) : <small>全部已完成</small>}</div>}</div><small>通知编号：{statsId}</small></section>}
-    {stats && statsId === item.id && item.status === 'published' && item.kind === 'task' && <section className="completed-recipients"><h3>已完成同学与照片</h3>{stats.completedRecipients?.length ? stats.completedRecipients.map(person => <article className="completed-recipient" key={person.email}><strong>{person.displayName}</strong><small>{person.email} · 完成于 {completedTime.format(new Date(person.completedAt))}</small>{person.photos.length ? <PhotoGallery photos={person.photos} label={`${person.displayName}的完成照片`}/> : <p className="muted">未上传照片</p>}</article>) : <p className="empty-note">暂无已完成同学</p>}</section>}</article>) : <p className="empty-note">还没有通知草稿</p>}</div></>}
+    {stats && statsId === item.id && item.status === 'published' && item.kind === 'task' && <section className="completed-recipients"><h3>已完成同学与照片</h3>{stats.completedRecipients?.length ? stats.completedRecipients.map(person => <article className="completed-recipient" key={person.email}><strong>{person.displayName}</strong><small>{person.email} · 完成于 {completedTime.format(new Date(person.completedAt))}</small>{person.photos.length ? <PhotoGallery photos={person.photos} label={`${person.displayName}的完成照片`}/> : <p className="muted">未上传照片</p>}</article>) : <p className="empty-note">暂无已完成同学</p>}</section>}</article>) : !recordsLoading && !error ? <p className="empty-note">还没有通知草稿</p> : null}</div></>}
   </div>;
 }

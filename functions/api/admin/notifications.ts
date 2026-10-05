@@ -16,8 +16,16 @@ async function activeSelection(context: Ctx, emails: string[] | null) {
 export const onRequestGet: PagesFunction<AdminEnv, string, AdminData> = async context => {
   if (!requireAdmin(context)) return denied();
   try {
-    const result = await context.env.DB.prepare('SELECT * FROM notifications ORDER BY COALESCE(published_at, created_at) DESC, id DESC').all<Row>();
-    return Response.json((result.results ?? []).map(({ recipient_emails, photos, attachments, requires_completion_proof, ...row }) => ({ ...row, attachments: attachmentLinks(attachments, row.id, true), requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })), { headers: { 'Cache-Control': 'no-store' } });
+    const started = performance.now();
+    // Only drafts need full content for editing; historical records display metadata.
+    // Project before D1 returns rows so base64 photos never cross the database boundary.
+    const result = await context.env.DB.prepare(`SELECT id, kind, priority, title, due_at, pinned, status, created_at, published_at, requires_completion_proof,
+      CASE WHEN status='draft' THEN body ELSE '' END AS body,
+      CASE WHEN status='draft' THEN photos ELSE '[]' END AS photos,
+      CASE WHEN status='draft' THEN attachments ELSE '[]' END AS attachments,
+      CASE WHEN status='draft' THEN recipient_emails ELSE NULL END AS recipient_emails
+      FROM notifications ORDER BY COALESCE(published_at, created_at) DESC, id DESC`).all<Row>();
+    return Response.json((result.results ?? []).map(({ recipient_emails, photos, attachments, requires_completion_proof, ...row }) => ({ ...row, attachments: attachmentLinks(attachments, row.id, true), requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })), { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `records-db;dur=${(performance.now() - started).toFixed(1)}` } });
   } catch { return unavailable(); }
 };
 

@@ -34,6 +34,27 @@ function setup() {
 }
 const draft = { kind: 'notice', priority: 'normal', title: '通知', body: '内容', dueAt: null, pinned: false };
 
+it('keeps editable draft content but excludes historical photo payloads from the records list', async () => {
+  const { sqlite, context } = setup();
+  try {
+    const photos = [{ id: 'p1', position: 0, dataUrl: `data:image/png;base64,iVBORw0KGgoA${'A'.repeat(200000)}` }];
+    const { id } = await (await onRequestPost(context('POST', { ...draft, photos, recipientEmails: ['a@example.com'] }))).json() as { id: string };
+    const editable = await (await onRequestGet(context('GET'))).json() as { photos: unknown[] }[];
+    expect(editable).toMatchObject([{ body: draft.body, recipientEmails: ['a@example.com'] }]);
+    expect(JSON.stringify(editable[0].photos) === JSON.stringify(photos)).toBe(true);
+    for (const action of ['publish', 'withdraw']) {
+      await onRequestPatch(context('PATCH', { id, action }));
+      const response = await onRequestGet(context('GET'));
+      const text = await response.text();
+      expect(text.length).toBeLessThan(2000);
+      expect(JSON.parse(text)).toMatchObject([{ id, title: draft.title, photos: [], body: '', recipientEmails: null }]);
+      expect(sqlite.prepare('SELECT photos FROM notifications WHERE id=?').get(id)?.photos === JSON.stringify(photos)).toBe(true);
+    }
+    const unauthorized = { ...(context('GET') as object), data: {} } as never;
+    expect((await onRequestGet(unauthorized)).status).toBe(403);
+  } finally { sqlite.close(); }
+});
+
 it('orders by publication rather than draft creation, importance or pinned status', async () => {
   const { sqlite, context, db } = setup();
   try {
