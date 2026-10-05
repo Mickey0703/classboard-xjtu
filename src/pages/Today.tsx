@@ -8,7 +8,6 @@ import ClassEmblem from '../components/ClassEmblem';
 
 const dayFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'long' });
 const dueFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-const weight = { urgent: 3, important: 2, normal: 1 };
 
 export default function Today({ snapshot, now, onNavigate, receipts = null, receiptStatus = 'guest' }: { snapshot: Snapshot; now: Date; onNavigate: (page: Page) => void; receipts?: RecipientStatus[] | null; receiptStatus?: 'loading' | 'ready' | 'guest' | 'error' }) {
   const [weather, setWeather] = useState<WeatherResult | null>(null);
@@ -28,7 +27,7 @@ export default function Today({ snapshot, now, onNavigate, receipts = null, rece
   }, []);
   useEffect(() => { let active = true; void getXianWeather().then(result => { if (active) setWeather(result); }); return () => { active = false; }; }, []);
   const upcoming = snapshot.events.filter(e => !e.done && Date.parse(e.dueAt) >= now.getTime()).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
-  const notices = [...snapshot.notifications].sort((a, b) => Number(b.pinned) - Number(a.pinned) || weight[b.priority] - weight[a.priority] || b.publishedAt.localeCompare(a.publishedAt));
+  const notices = [...snapshot.notifications].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || b.id.localeCompare(a.id));
   const important = notices.find(n => n.priority !== 'normal');
   const tasks = snapshot.notifications.filter(n => n.kind === 'task');
   const pendingTasks = tasks.filter(task => receipts?.some(receipt => receipt.notificationId === task.id && !receipt.completedAt)).length;

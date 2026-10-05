@@ -95,16 +95,29 @@ it('promotes an urgent published notice on the homepage', async () => {
   vi.unstubAllGlobals();
 });
 
-it('keeps urgent notices ahead of newer important notices on the homepage', async () => {
+it('shows the most recently published important notice before older urgent notices on the homepage', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
   const two = { ...snapshot, notifications: [
-    { ...snapshot.notifications[0], pinned: false },
+    { ...snapshot.notifications[0], pinned: true },
     { ...snapshot.notifications[1], title: '较新的重要通知', kind: 'notice' as const, dueAt: null, publishedAt: '2026-09-29T12:00:00+08:00' }
   ] };
   render(<Today snapshot={two} now={new Date('2026-09-29T03:00:00Z')} onNavigate={vi.fn()} />);
-  expect(screen.getByRole('heading', { name: '校区调整' })).toBeTruthy();
-  expect(screen.queryByRole('heading', { name: '较新的重要通知' })).toBeNull();
+  expect(screen.getByRole('heading', { name: '较新的重要通知' })).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: '校区调整' })).toBeNull();
   expect(await screen.findByText('天气暂不可用')).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
+it('orders public notices and the homepage digest by publication time even when older notices are urgent and pinned', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 })));
+  const two = { ...snapshot, notifications: [snapshot.notifications[0], { ...snapshot.notifications[1], title: '最新普通通知', kind: 'notice' as const, priority: 'normal' as const, dueAt: null, publishedAt: '2026-09-29T12:00:00+08:00' }] };
+  const noticeView = render(<Notifications snapshot={two} now={new Date()} />);
+  expect(screen.getAllByRole('article').map(card => card.querySelector('h2')?.textContent)).toEqual(['最新普通通知', '校区调整']);
+  await screen.findByText('使用班级邮箱登录');
+  noticeView.unmount();
+  const todayView = render(<Today snapshot={two} now={new Date()} onNavigate={vi.fn()} />);
+  expect(Array.from(todayView.container.querySelectorAll('.digest-row strong'), element => element.textContent)).toEqual(['最新普通通知', '校区调整']);
+  await screen.findByText('天气暂不可用');
   vi.unstubAllGlobals();
 });
 

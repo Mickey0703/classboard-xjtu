@@ -7,7 +7,6 @@ import { Modal, NotificationBody, PhotoGallery } from '../components/PhotoViewer
 
 type Filter = 'all' | 'notice' | 'task';
 type Member = { email: string; displayName: string };
-const priorityOrder = { urgent: 3, important: 2, normal: 1 };
 const timeFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 
 export default function Notifications({ snapshot, now, onReceiptsChanged }: { snapshot: Snapshot; now: Date; onReceiptsChanged?: (rows: RecipientStatus[]) => void }) {
@@ -56,7 +55,7 @@ export default function Notifications({ snapshot, now, onReceiptsChanged }: { sn
     if (action === 'complete' && item?.requiresCompletionProof) { setError(''); setPhotos([]); setCompleting(item); }
     else await change(id, action);
   };
-  const items = [...snapshot.notifications].filter(n => filter === 'all' || n.kind === filter).sort((a, b) => Number(b.pinned) - Number(a.pinned) || priorityOrder[b.priority] - priorityOrder[a.priority] || b.publishedAt.localeCompare(a.publishedAt));
+  const items = [...snapshot.notifications].filter(n => filter === 'all' || n.kind === filter).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || b.id.localeCompare(a.id));
   return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS NOTICEBOARD</span><h1>班级通知</h1><p>重要消息及时看，待办事项不遗漏。</p></div><Bell className="title-illustration" size={52}/></div>
     {snapshot.demo && <div className="demo-banner">演示数据 · 正式通知由班委发布</div>}
     <div className="notice-intro"><div><strong>{snapshot.notifications.length}</strong><span>条已发布通知</span></div><p>阅读通知无需登录；确认知悉和完成待办需要班级邮箱身份。</p></div>

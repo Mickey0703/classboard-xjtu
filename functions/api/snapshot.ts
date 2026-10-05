@@ -9,7 +9,7 @@ export async function loadSnapshot(db: D1Database): Promise<Snapshot> {
   const [settings, eventRows, notificationRows] = await Promise.all([
     db.prepare('SELECT key, value FROM settings').all<{ key: string; value: string }>(),
     db.prepare('SELECT * FROM events ORDER BY due_at').all<EventRow>(),
-    db.prepare('SELECT * FROM notifications WHERE status = ? ORDER BY pinned DESC, published_at DESC').bind('published').all<NotificationRow>()
+    db.prepare('SELECT * FROM notifications WHERE status = ? ORDER BY published_at DESC, id DESC').bind('published').all<NotificationRow>()
   ]);
   const values = Object.fromEntries((settings.results ?? []).map(({ key, value }) => [key, value]));
   const events: EventItem[] = (eventRows.results ?? []).map(row => ({ id: row.id, title: row.title, description: row.description, category: row.category, startAt: row.start_at, dueAt: row.due_at, done: Boolean(row.done) }));

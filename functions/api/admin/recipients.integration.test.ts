@@ -34,6 +34,21 @@ function setup() {
 }
 const draft = { kind: 'notice', priority: 'normal', title: '通知', body: '内容', dueAt: null, pinned: false };
 
+it('orders by publication rather than draft creation, importance or pinned status', async () => {
+  const { sqlite, context, db } = setup();
+  try {
+    const newer = await (await onRequestPost(context('POST', { ...draft, title: '后发布的普通通知' }))).json() as { id: string };
+    const older = await (await onRequestPost(context('POST', { ...draft, title: '先发布的置顶紧急通知', pinned: true, priority: 'urgent' }))).json() as { id: string };
+    await onRequestPatch(context('PATCH', { id: older.id, action: 'publish' }));
+    await onRequestPatch(context('PATCH', { id: newer.id, action: 'publish' }));
+    sqlite.prepare('UPDATE notifications SET created_at=?, published_at=? WHERE id=?').run('2026-10-05T09:00:00+08:00', '2026-10-05T11:00:00+08:00', newer.id);
+    sqlite.prepare('UPDATE notifications SET created_at=?, published_at=? WHERE id=?').run('2026-10-05T09:30:00+08:00', '2026-10-05T10:00:00+08:00', older.id);
+    expect((await loadSnapshot(db as unknown as D1Database)).notifications.map(item => item.id)).toEqual([newer.id, older.id]);
+    const records = await (await onRequestGet(context('GET'))).json() as { id: string }[];
+    expect(records.map(item => item.id)).toEqual([newer.id, older.id]);
+  } finally { sqlite.close(); }
+});
+
 it('persists the task proof requirement through draft editing and publication and enforces it for recipients', async () => {
   const { sqlite, context, db } = setup();
   const body = { ...draft, kind: 'task', dueAt: '2026-10-05T18:00:00+08:00', requiresCompletionProof: true };

@@ -16,7 +16,7 @@ async function activeSelection(context: Ctx, emails: string[] | null) {
 export const onRequestGet: PagesFunction<AdminEnv, string, AdminData> = async context => {
   if (!requireAdmin(context)) return denied();
   try {
-    const result = await context.env.DB.prepare('SELECT * FROM notifications ORDER BY created_at DESC').all<Row>();
+    const result = await context.env.DB.prepare('SELECT * FROM notifications ORDER BY COALESCE(published_at, created_at) DESC, id DESC').all<Row>();
     return Response.json((result.results ?? []).map(({ recipient_emails, photos, attachments, requires_completion_proof, ...row }) => ({ ...row, attachments: attachmentLinks(attachments, row.id, true), requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })), { headers: { 'Cache-Control': 'no-store' } });
   } catch { return unavailable(); }
 };
