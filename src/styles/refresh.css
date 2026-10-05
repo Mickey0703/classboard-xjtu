@@ -295,3 +295,5 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
   .summary-strip > div { padding: 15px 10px; }
   .metric-copy strong { font-size: 25px; }
 }
+.notification-record > .notice-stats { margin-top: 16px; }
+.notification-record:has(> .notice-stats) { padding-bottom: 24px; }

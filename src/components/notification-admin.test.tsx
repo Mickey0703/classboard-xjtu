@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import NotificationEditor, { type NotificationAdminView } from './NotificationAdmin';
@@ -8,6 +8,26 @@ function NotificationAdmin({ onPublished, initialView = 'compose' }: { onPublish
   const [view, setView] = useState<NotificationAdminView>(initialView);
   return <><nav><button onClick={() => setView('compose')}>通知</button><button onClick={() => setView('records')}>通知记录</button></nav><NotificationEditor view={view} onViewChange={setView} onPublished={onPublished}/></>;
 }
+
+it('shows statistics and completion photos beneath the selected record and moves them when switching notices', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [] };
+    if (url.includes('notification-stats')) return { ok: true, json: async () => ({ total: 1, acknowledged: 1, completed: 1, notAcknowledged: [], notCompleted: [], completedRecipients: [{ email: 'a@example.com', displayName: '同学甲', completedAt: '2026-10-05T10:00:00+08:00', photos: [] }] }) };
+    return { ok: true, json: async () => ['第一条', '第二条', '第三条'].map((title, index) => ({ id: `n${index}`, kind: index === 0 ? 'task' : 'notice', priority: 'normal', title, body: '内容', status: 'published', pinned: 0, due_at: null })) };
+  }));
+  render(<NotificationAdmin onPublished={() => {}} initialView="records"/>);
+  const first = (await screen.findByText('第一条')).closest('article')!;
+  const second = screen.getByText('第二条').closest('article')!;
+  fireEvent.click(within(first).getByRole('button', { name: '查看统计' }));
+  expect(await within(first).findByRole('heading', { name: '传达统计' })).toBeTruthy();
+  expect(within(first).getByRole('heading', { name: '已完成同学与照片' })).toBeTruthy();
+  expect(within(second).queryByRole('heading', { name: '传达统计' })).toBeNull();
+  fireEvent.click(within(second).getByRole('button', { name: '查看统计' }));
+  expect(await within(second).findByRole('heading', { name: '传达统计' })).toBeTruthy();
+  expect(within(first).queryByRole('heading', { name: '传达统计' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: '已完成同学与照片' })).toBeNull();
+  vi.unstubAllGlobals();
+});
 
 it('offers a proof requirement only for tasks, restores it for drafts and clears it when switching to a notice', async () => {
   const writes: Record<string, unknown>[] = [];
