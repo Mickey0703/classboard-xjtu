@@ -12,6 +12,20 @@
 .notice-attachment strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
 .notice-attachment small { color: var(--muted); font-size: 12px; }
 .notice-attachment:hover { border-color: var(--red); }
+.file-dialog { width: min(900px, calc(100vw - 24px)); }
+.file-dialog .section-head { position: sticky; top: -1px; z-index: 2; padding: 8px 0; background: var(--surface); }
+.file-dialog .section-head h2 { flex: 1; min-width: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-dialog .section-head > button { flex: none; }
+.file-panel-meta { font-size: 13px; color: var(--muted); }
+.file-preview { max-height: 52dvh; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 6px; background: var(--subtle); padding: 8px; }
+.file-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font-size: 13px; color: var(--text); }
+.file-preview img { max-width: 100%; margin: auto; }
+.pdf-canvas-container canvas { display: block; max-width: none; background: #fff; }
+.pdf-controls, .file-panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0; }
+.pdf-controls { font-size: 13px; }
+.pdf-controls label { display: inline-flex; align-items: center; gap: 8px; }
+.pdf-controls select { min-height: 44px; padding: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; }
+.file-panel-actions > a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
 :root {
   --red: #991e32; --red-dark: #791526; --navy: #08254d; --emblem-color: #08254d;
   --text: #202c3b; --muted: #526172; --border: #dce2e8;
