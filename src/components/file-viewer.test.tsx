@@ -45,3 +45,27 @@ it('lets iOS users share the prepared file without navigating and allows closing
   delete (navigator as Partial<Navigator>).canShare; delete (navigator as Partial<Navigator>).share;
   vi.unstubAllGlobals();
 });
+
+it('reuses public file bytes on reopening after a metadata check and rejects a withdrawn file', async () => {
+  let withdrawn = false;
+  let byteDownloads = 0;
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+    if (withdrawn) return new Response(JSON.stringify({ error: '通知已撤回' }), { status: 404 });
+    if (init?.method === 'HEAD') return new Response(null, { status: 304, headers: { ETag: '"cached-file"' } });
+    byteDownloads++;
+    return new Response('姓名,邮箱\n', { headers: { ETag: '"cached-file"' } });
+  }));
+  const file = { ...attachment, size: 14, url: '/api/notification-file?notificationId=cache-test&id=cache-file' };
+  render(<NotificationBody body="内容" attachments={[file]}/>);
+  const open = () => fireEvent.click(screen.getByRole('link', { name: /通知附件.csv/ }));
+  open(); await screen.findByText('姓名,邮箱');
+  fireEvent.click(screen.getByRole('button', { name: '关闭文件' }));
+  open(); await screen.findByText('姓名,邮箱');
+  expect(byteDownloads).toBe(1);
+  fireEvent.click(screen.getByRole('button', { name: '关闭文件' }));
+  withdrawn = true;
+  open(); expect((await screen.findByRole('alert')).textContent).toBe('通知已撤回');
+  expect(screen.queryByText('姓名,邮箱')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '关闭文件' }));
+  vi.unstubAllGlobals();
+});

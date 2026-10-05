@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
+import { downloadFile } from '../attachment-helpers';
 import { onRequestPost as upload } from './notification-files';
 import { onRequestPost as create, onRequestPut as edit, onRequestPatch as transition, onRequestGet as list } from './notifications';
 import { onRequestGet as publicFile } from '../notification-file';
@@ -31,6 +32,31 @@ function setup() {
   return { sqlite, db, context, json, fileRequest };
 }
 const draft = { title: '附件通知', body: '前文后文', kind: 'notice', priority: 'normal', dueAt: null, pinned: false };
+
+it('revalidates publication before reusing cached bytes and returns metadata without reading chunks', async () => {
+  const { sqlite, db, context, json, fileRequest } = setup();
+  const responses = new Map<string, Response>();
+  const cache = { match: async (key: Request) => responses.get(key.url)?.clone(), put: async (key: Request, response: Response) => { responses.set(key.url, response.clone()); } };
+  try {
+    const file = await (await upload(context(fileRequest(new Uint8Array([1, 2, 3]))))).json() as { id: string };
+    const { id } = await (await create(json('POST', { ...draft, attachments: [{ id: file.id, position: 0 }] }))).json() as { id: string };
+    await transition(json('PATCH', { id, action: 'publish' }));
+    const request = new Request(`https://example.com/api/notification-file?notificationId=${id}&id=${file.id}`);
+    const pending: Promise<unknown>[] = [];
+    const first = await downloadFile(db as unknown as D1Database, request, false, { cache, waitUntil: promise => { pending.push(promise); } });
+    expect(first.status).toBe(200); await Promise.all(pending);
+    const etag = first.headers.get('ETag'); expect(etag).toBeTruthy();
+    const noChunks = { ...db, prepare: (sql: string) => { if (sql.includes('FROM notification_file_chunks')) throw Error('chunk source unavailable'); return db.prepare(sql); } };
+    const cached = await downloadFile(noChunks as unknown as D1Database, request, false, { cache });
+    expect(cached.status).toBe(200);
+    expect(new Uint8Array(await cached.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    const conditional = new Request(request.url, { headers: { 'If-None-Match': etag! } });
+    expect((await downloadFile(noChunks as unknown as D1Database, conditional)).status).toBe(304);
+    expect((await downloadFile(noChunks as unknown as D1Database, new Request(request.url, { method: 'HEAD' }))).status).toBe(200);
+    await transition(json('PATCH', { id, action: 'withdraw' }));
+    expect((await downloadFile(noChunks as unknown as D1Database, conditional, false, { cache })).status).toBe(404);
+  } finally { sqlite.close(); }
+});
 
 it('stores large binary files, keeps draft downloads private and exposes only saved published attachments', async () => {
   const { sqlite, db, context, json, fileRequest } = setup();

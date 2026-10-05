@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileDown } from 'lucide-react';
 import { fileSizeLabel, type Attachment } from '../domain/attachments';
 import { Modal } from './Modal';
 import PdfPreview from './PdfPreview';
+import { loadAttachmentBytes, prefetchAttachment } from '../api/attachment-source';
 
 function fileType(name: string, bytes: Uint8Array): string {
   if (new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-') return 'application/pdf';
@@ -18,14 +19,13 @@ function FilePanel({ file, onClose }: { file: Attachment; onClose: () => void })
   const [prepared, setPrepared] = useState<{ file: File; bytes: Uint8Array<ArrayBuffer>; imageUrl?: string } | null>(null);
   const [error, setError] = useState('');
   const [sharing, setSharing] = useState(false);
+  const [progress, setProgress] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     let imageUrl: string | undefined;
     void (async () => {
       try {
-        const response = await fetch(file.url, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
-        if (!response.ok) { const result = await response.json().catch(() => ({})) as { error?: string }; throw Error(result.error ?? '文件暂时无法读取，请稍后重试'); }
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const bytes = await loadAttachmentBytes(file, controller.signal, (loaded, total) => { if (!controller.signal.aborted) setProgress(Math.min(100, Math.round(loaded / Math.max(1, total) * 100))); });
         if (controller.signal.aborted) return;
         const type = fileType(file.name, bytes);
         const attachment = new File([bytes], file.name, { type });
@@ -46,18 +46,24 @@ function FilePanel({ file, onClose }: { file: Attachment; onClose: () => void })
   };
   return <Modal title={file.name} onClose={onClose} closeLabel="关闭文件" className="file-dialog">
     <p className="file-panel-meta">{fileSizeLabel(file.size)} · 关闭文件即可回到原页面</p>
-    {!prepared && !error && <p role="status">正在读取文件…</p>}
+    {!prepared && !error && <p role="status">正在准备文件…{progress > 0 ? ` ${progress}%` : ''}</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {prepared?.file.type === 'application/pdf' && <PdfPreview bytes={prepared.bytes}/>}
     {prepared?.imageUrl && <div className="file-preview"><img src={prepared.imageUrl} alt={file.name}/></div>}
     {prepared?.file.type.startsWith('text/') && <div className="file-preview"><pre>{new TextDecoder().decode(prepared.bytes).slice(0, 100_000)}</pre>{prepared.bytes.length > 100_000 && <p className="muted">内容较长，可保存后查看完整文件。</p>}</div>}
     {prepared && prepared.file.type !== 'application/pdf' && !prepared.imageUrl && !prepared.file.type.startsWith('text/') && <p>可保存到“文件”或使用对应应用查看。</p>}
-    <div className="file-panel-actions">{canShare && <button type="button" className="primary-button" disabled={sharing} onClick={() => void share()}>{sharing ? '正在打开分享菜单…' : '保存或分享文件'}</button>}<a className="outline-button" href={file.url} target="_blank" rel="noopener noreferrer">在新窗口下载</a></div>
+    <div className="file-panel-actions">{(canShare || (!prepared && !error && typeof navigator.share === 'function')) && <button type="button" className="primary-button" disabled={!prepared || sharing} onClick={() => void share()}>{!prepared ? '文件准备中…' : sharing ? '正在打开分享菜单…' : '保存或分享文件'}</button>}<a className="outline-button" href={file.url} target="_blank" rel="noopener noreferrer">在新窗口下载</a></div>
     <p className="muted">iPhone / iPad 可在分享菜单中选择“存储到文件”；下载或分享不会替换通知页面。</p>
   </Modal>;
 }
 
 export default function AttachmentCard({ file }: { file: Attachment }) {
   const [open, setOpen] = useState(false);
-  return <><a className="notice-attachment" href={file.url} target="_blank" rel="noopener noreferrer" onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); setOpen(true); } }}><FileDown size={20} aria-hidden="true"/><span><strong>{file.name}</strong><small>{fileSizeLabel(file.size)} · 点击查看或保存</small></span></a>{open && <FilePanel file={file} onClose={() => setOpen(false)}/>}</>;
+  const link = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (!link.current || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting) && document.visibilityState === 'visible') { observer.disconnect(); prefetchAttachment(file); } });
+    observer.observe(link.current); return () => observer.disconnect();
+  }, [file.url, file.size]);
+  return <><a ref={link} className="notice-attachment" href={file.url} target="_blank" rel="noopener noreferrer" onFocus={() => prefetchAttachment(file)} onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); setOpen(true); } }}><FileDown size={20} aria-hidden="true"/><span><strong>{file.name}</strong><small>{fileSizeLabel(file.size)} · 点击查看或保存</small></span></a>{open && <FilePanel file={file} onClose={() => setOpen(false)}/>}</>;
 }
