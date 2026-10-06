@@ -14,6 +14,19 @@ const snapshot: Snapshot = {
 };
 const requiredSnapshot = { ...snapshot, notifications: snapshot.notifications.map(item => ({ ...item, requiresCompletionProof: item.kind === 'task' })) };
 
+it('reloads receipts when a notification is republished with the same ID instead of displaying its old completion', async () => {
+  let republished = false;
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/session') ? { email: 'a@example.com', displayName: '同学 A' } : [{ notificationId: 'task', acknowledgedAt: null, completedAt: republished ? null : '2026-09-29T12:00:00+08:00' }] })));
+  const { rerender } = render(<Notifications snapshot={snapshot} now={new Date()} />);
+  await screen.findByRole('button', { name: '撤销完成' });
+  republished = true;
+  const updated = { ...snapshot, notifications: snapshot.notifications.map(item => ({ ...item, publishedAt: '2026-10-05T12:00:00+08:00' })) };
+  rerender(<Notifications snapshot={updated} now={new Date()} />);
+  expect(screen.queryByRole('button', { name: '撤销完成' })).toBeNull();
+  await screen.findByRole('button', { name: '标记已完成' });
+  vi.unstubAllGlobals();
+});
+
 it('renders notification photos between the selected portions of the body', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
   const withPhotos = { ...snapshot, notifications: [{ ...snapshot.notifications[0], body: '前文后文', photos: [{ id: 'p1', position: 2, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }] }] };
@@ -57,7 +70,7 @@ it('completes a task directly without an upload dialog when proof is not require
   fireEvent.click(await screen.findByRole('button', { name: '标记已完成' }));
   expect(screen.queryByRole('dialog')).toBeNull();
   await screen.findByRole('button', { name: '撤销完成' });
-  expect(writes).toEqual([{ notificationId: 'task', action: 'complete', photos: [] }]);
+  expect(writes).toEqual([{ notificationId: 'task', action: 'complete', photos: [], publishedAt: '2026-09-29T09:00:00+08:00' }]);
   expect(screen.queryByRole('dialog')).toBeNull();
   vi.unstubAllGlobals();
 });

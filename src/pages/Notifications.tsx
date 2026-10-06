@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Bell, CheckCheck, CircleCheck, ClipboardCheck, Clock3, Pin } from 'lucide-react';
 import type { NotificationItem, RecipientStatus, Snapshot } from '../domain/types';
 import type { Photo } from '../domain/photos';
@@ -10,6 +10,10 @@ type Member = { email: string; displayName: string };
 const timeFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 
 export default function Notifications({ snapshot, now, onReceiptsChanged }: { snapshot: Snapshot; now: Date; onReceiptsChanged?: (rows: RecipientStatus[]) => void }) {
+  const publicationVersions = snapshot.notifications.map(item => `${item.id}:${item.publishedAt}`).sort().join('|');
+  const currentVersions = useRef(publicationVersions);
+  currentVersions.current = publicationVersions;
+  const [receiptVersions, setReceiptVersions] = useState('');
   const [member, setMember] = useState<Member | null>(null);
   const [checking, setChecking] = useState(true);
   const [receipts, setReceipts] = useState<RecipientStatus[]>([]);
@@ -29,24 +33,25 @@ export default function Notifications({ snapshot, now, onReceiptsChanged }: { sn
         const status = await fetch('/api/member/receipt', { credentials: 'same-origin' });
         if (!status.ok) throw Error('receipt unavailable');
         const rows = await status.json() as RecipientStatus[];
-        if (active) { setMember(person); setReceipts(rows); onReceiptsChanged?.(rows); }
+        if (active) { setMember(person); setReceipts(rows); setReceiptVersions(publicationVersions); onReceiptsChanged?.(rows); }
       } catch { if (active) setMember(null); }
       finally { if (active) setChecking(false); }
     };
     void load();
     return () => { active = false; };
-  }, [onReceiptsChanged]);
+  }, [onReceiptsChanged, publicationVersions]);
   const change = async (notificationId: string, action: 'ack' | 'complete' | 'undoComplete', completionPhotos?: Photo[]) => {
     if (pending) return;
     setError(''); setPending(notificationId);
     try {
-      const response = await fetch('/api/member/receipt', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId, action, ...(action === 'complete' ? { photos: completionPhotos ?? [] } : {}) }) });
+      const publishedAt = (completing?.id === notificationId ? completing : snapshot.notifications.find(item => item.id === notificationId))?.publishedAt;
+      const response = await fetch('/api/member/receipt', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId, action, publishedAt, ...(action === 'complete' ? { photos: completionPhotos ?? [] } : {}) }) });
       if (!response.ok) { const result = await response.json().catch(() => ({})) as { error?: string }; throw Error(result.error ?? '确认失败'); }
       if (action === 'complete') { setCompleting(null); setPhotos([]); }
       const refreshed = await fetch('/api/member/receipt', { credentials: 'same-origin', cache: 'no-store' });
       if (!refreshed.ok) throw Error('已保存，但状态刷新失败，请重新打开通知页');
       const rows = await refreshed.json() as RecipientStatus[];
-      setReceipts(rows); onReceiptsChanged?.(rows);
+      if (currentVersions.current === publicationVersions) { setReceipts(rows); setReceiptVersions(publicationVersions); onReceiptsChanged?.(rows); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : '确认失败'); }
     finally { setPending(''); }
   };
@@ -62,7 +67,7 @@ export default function Notifications({ snapshot, now, onReceiptsChanged }: { sn
     {!checking && (member ? <div className="member-strip"><CheckCheck size={18}/> {member.displayName} · {member.email}</div> : <div className="member-strip"><AlertCircle size={18}/><span>登录后可确认通知是否送达你本人。</span><a href="/api/member/login">使用班级邮箱登录</a></div>)}
     {error && !completing && <div className="form-error" role="alert">{error}</div>}
     <div className="filter-tabs notice-filters" aria-label="通知类型"><button className={filter === 'all' ? 'selected' : ''} onClick={() => setFilter('all')}>全部</button><button className={filter === 'notice' ? 'selected' : ''} onClick={() => setFilter('notice')}>公告</button><button className={filter === 'task' ? 'selected' : ''} onClick={() => setFilter('task')}>待办</button></div>
-    <div className="notice-list">{items.length ? items.map(n => <NoticeCard key={n.id} item={n} now={now} member={member} receipt={receipts.find(r => r.notificationId === n.id)} pending={Boolean(pending)} onChange={onAction}/>) : <div className="state-card"><h2>暂无通知</h2><p>班委发布后，这里会显示公告和待办。</p></div>}</div>
+    <div className="notice-list">{items.length ? items.map(n => <NoticeCard key={n.id} item={n} now={now} member={receiptVersions === publicationVersions ? member : null} receipt={receiptVersions === publicationVersions ? receipts.find(r => r.notificationId === n.id) : undefined} pending={Boolean(pending)} onChange={onAction}/>) : <div className="state-card"><h2>暂无通知</h2><p>班委发布后，这里会显示公告和待办。</p></div>}</div>
     {completing && <Modal title="提交完成照片" busy={Boolean(pending) || uploading} onClose={() => { setCompleting(null); setPhotos([]); setError(''); }}>
       <p className="completion-task-title">{completing.title}</p><p>请添加完成照片或截图，供班委查看。</p>
       <PhotoUpload photos={photos} onChange={setPhotos} label="添加完成照片" disabled={Boolean(pending)} onBusy={setUploading}/>

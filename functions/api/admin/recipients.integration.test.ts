@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { onRequestPost, onRequestPatch, onRequestPut, onRequestGet } from './notifications';
+import { onRequestPost, onRequestPatch, onRequestPut, onRequestGet, onRequestDelete } from './notifications';
 import { onRequestPost as importMembers } from './members';
 import { onRequestGet as receipts, onRequestPost as changeReceipt } from '../member/receipt';
 import { onRequestGet as stats } from './notification-stats';
@@ -33,6 +33,89 @@ function setup() {
   return { sqlite, context, db };
 }
 const draft = { kind: 'notice', priority: 'normal', title: '通知', body: '内容', dueAt: null, pinned: false };
+
+it('restores the withdrawn record as a draft with its content and resets receipts before republishing', async () => {
+  const { sqlite, context } = setup();
+  try {
+    const photos = [{ id: 'p1', position: 0, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }];
+    const { id } = await (await onRequestPost(context('POST', { ...draft, photos, recipientEmails: ['a@example.com'] }))).json() as { id: string };
+    await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+    await onRequestPatch(context('PATCH', { id, action: 'withdraw' }));
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients WHERE notification_id=?').get(id)?.count).toBe(1);
+    expect((await onRequestPatch(context('PATCH', { id, action: 'restore' }))).status).toBe(200);
+    expect(await (await onRequestGet(context('GET'))).json()).toMatchObject([{ id, status: 'draft', body: draft.body, photos, recipientEmails: ['a@example.com'], published_at: null }]);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients WHERE notification_id=?').get(id)?.count).toBe(0);
+    expect((await onRequestPatch(context('PATCH', { id, action: 'restore' }))).status).toBe(409);
+    expect((await onRequestPatch(context('PATCH', { id, action: 'publish' }))).status).toBe(200);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients WHERE notification_id=?').get(id)?.count).toBe(1);
+  } finally { sqlite.close(); }
+});
+
+it('deletes expired or withdrawn selections atomically with receipts and refuses active or stale targets', async () => {
+  const { sqlite, context } = setup();
+  sqlite.exec('PRAGMA foreign_keys=ON');
+  try {
+    const create = async (body: Omit<typeof draft, 'dueAt'> & { dueAt: string | null } = draft) => {
+      const { id } = await (await onRequestPost(context('POST', body))).json() as { id: string };
+      await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+      return id;
+    };
+    const old = await create({ ...draft, kind: 'task', dueAt: '2000-01-01T00:00:00+08:00' });
+    const withdrawn = await create();
+    const active = await create();
+    await onRequestPatch(context('PATCH', { id: withdrawn, action: 'withdraw' }));
+    expect((await onRequestDelete(context('DELETE', { ids: [withdrawn, active], category: 'withdrawn' }))).status).toBe(409);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients').get()?.count).toBe(6);
+    expect((await onRequestDelete(context('DELETE', { ids: [old], category: 'expired' }))).status).toBe(200);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients WHERE notification_id=?').get(old)?.count).toBe(0);
+    expect((await onRequestDelete(context('DELETE', { ids: [withdrawn, 'missing'], category: 'withdrawn' }))).status).toBe(409);
+    expect((await onRequestDelete(context('DELETE', { ids: [withdrawn], category: 'withdrawn' }))).status).toBe(200);
+    expect(sqlite.prepare('SELECT id FROM notifications').all()).toEqual([{ id: active }]);
+    expect((await onRequestDelete(context('DELETE', { ids: [active], category: 'expired' }))).status).toBe(409);
+    expect((await onRequestDelete(context('DELETE', { ids: [], category: 'withdrawn' }))).status).toBe(400);
+    expect((await onRequestDelete({ ...(context('DELETE', { ids: [active], category: 'expired' }) as object), data: {} } as never)).status).toBe(403);
+  } finally { sqlite.close(); }
+});
+
+it('does not apply a previous publication request after the same ID is restored and republished', async () => {
+  for (const action of ['ack', 'complete', 'undoComplete']) {
+    const { sqlite, context, db } = setup();
+    try {
+      const { id } = await (await onRequestPost(context('POST', { ...draft, kind: 'task', dueAt: '2099-01-01T00:00:00+08:00' }))).json() as { id: string };
+      await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+      sqlite.prepare('UPDATE notifications SET published_at=? WHERE id=?').run('2000-01-01T00:00:00+08:00', id);
+      const racedDb = { ...db, prepare: (sql: string) => {
+        const statement = db.prepare(sql);
+        if (!sql.startsWith('SELECT n.id')) return statement;
+        return { ...statement, bind: (...args: never[]) => {
+          const bound = statement.bind(...args);
+          return { ...bound, first: async () => {
+            const row = await bound.first();
+            await onRequestPatch(context('PATCH', { id, action: 'withdraw' }));
+            await onRequestPatch(context('PATCH', { id, action: 'restore' }));
+            await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+            sqlite.prepare('UPDATE notification_recipients SET completed_at=? WHERE notification_id=?').run('new completion', id);
+            return row;
+          } };
+        } };
+      } };
+      const memberContext = { env: { DB: racedDb }, data: { member: { email: 'a@example.com', displayName: '甲' } }, request: new Request('https://example.com/api/member/receipt', { method: 'POST', body: JSON.stringify({ notificationId: id, action }) }) } as never;
+      expect((await changeReceipt(memberContext)).status).toBe(409);
+      expect(sqlite.prepare('SELECT completed_at FROM notification_recipients WHERE notification_id=? AND member_email=?').get(id, 'a@example.com')?.completed_at).toBe('new completion');
+    } finally { sqlite.close(); }
+  }
+});
+
+it('supports deleting a whole category containing more than 500 records', async () => {
+  const { sqlite, context } = setup();
+  try {
+    const ids = Array.from({ length: 501 }, (_, index) => `bulk-${index}`);
+    const insert = sqlite.prepare("INSERT INTO notifications (id, kind, priority, title, body, status, author_email, created_at) VALUES (?, 'notice', 'normal', '旧通知', '正文', 'withdrawn', 'admin@example.com', '2000-01-01')");
+    for (const id of ids) insert.run(id);
+    expect((await onRequestDelete(context('DELETE', { ids, category: 'withdrawn' }))).status).toBe(200);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notifications').get()?.count).toBe(0);
+  } finally { sqlite.close(); }
+});
 
 it('keeps editable draft content but excludes historical photo payloads from the records list', async () => {
   const { sqlite, context } = setup();

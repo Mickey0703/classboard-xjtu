@@ -5,6 +5,7 @@ import PhotoUpload from './PhotoUpload';
 import { NotificationBody, PhotoGallery } from './PhotoViewer';
 import FileUpload from './FileUpload';
 import type { Attachment } from '../domain/attachments';
+import { Modal } from './Modal';
 
 interface AdminNotification {
   id: string; kind: NotificationKind; priority: NotificationPriority; title: string; body: string;
@@ -17,11 +18,20 @@ interface AdminNotification {
 interface Stats { total: number; acknowledged: number; completed: number; notAcknowledged: { email: string; displayName: string }[]; notCompleted: { email: string; displayName: string }[]; completedRecipients?: { email: string; displayName: string; completedAt: string; photos: Photo[] }[] }
 const blank = { kind: 'notice' as NotificationKind, priority: 'normal' as NotificationPriority, title: '', body: '', dueAt: null as string | null, pinned: false, photos: [] as Photo[], attachments: [] as Attachment[], requiresCompletionProof: false };
 const completedTime = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short' });
+type RecordFilter = 'all' | 'active' | 'expired' | 'withdrawn' | 'draft';
+const recordFilters: { id: RecordFilter; label: string }[] = [{ id: 'all', label: '全部' }, { id: 'active', label: '正在进行' }, { id: 'expired', label: '已逾期' }, { id: 'withdrawn', label: '已撤回' }, { id: 'draft', label: '草稿' }];
+const expired = (item: AdminNotification, now: number) => item.status === 'published' && item.kind === 'task' && item.due_at != null && Date.parse(item.due_at) <= now;
+const matchesFilter = (item: AdminNotification, filter: RecordFilter, now: number) => filter === 'all' || (filter === 'active' ? item.status === 'published' && !expired(item, now) : filter === 'expired' ? expired(item, now) : item.status === filter);
+type RecordAction = { type: 'delete'; ids: string[]; category: 'expired' | 'withdrawn' } | { type: 'restore'; id: string };
 export type NotificationAdminView = 'compose' | 'records';
 
 export default function NotificationAdmin({ onPublished, view, onViewChange }: { onPublished: () => Promise<void> | void; view: NotificationAdminView; onViewChange: (view: NotificationAdminView) => void }) {
   const [items, setItems] = useState<AdminNotification[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
+  const [recordFilter, setRecordFilter] = useState<RecordFilter>('all');
+  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [recordAction, setRecordAction] = useState<RecordAction | null>(null);
+  const [now, setNow] = useState(Date.now);
   const [members, setMembers] = useState<ClassMember[]>([]);
   const [membersLoaded, setMembersLoaded] = useState(false);
   const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
@@ -40,8 +50,10 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
   const load = async () => {
     const response = await fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' });
     if (!response.ok) throw Error('通知列表暂不可用');
-    setItems(await response.json() as AdminNotification[]);
+    const rows = await response.json() as AdminNotification[];
+    setItems(rows);
     setRecordsLoading(false);
+    return rows;
   };
   const loadStats = async (id: string) => {
     const response = await fetch(`/api/admin/notification-stats?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', cache: 'no-store' });
@@ -50,6 +62,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     setStatsId(id);
   };
   useEffect(() => { void load().catch(cause => { setRecordsLoading(false); setError(cause instanceof Error ? cause.message : '通知列表暂不可用'); }); }, []);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -73,10 +86,46 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     if (!recipientEmails.length) { setError('请至少选择一位收件人'); return; }
     if (form.kind === 'task' && !form.dueAt) { setError('待办必须填写截止时间'); return; }
     setBusy(true);
-    try { await request(form.id ? 'PUT' : 'POST', { ...form, recipientEmails }); await load(); setMessage('草稿已保存'); reset(); onViewChange('records'); }
+    try { await request(form.id ? 'PUT' : 'POST', { ...form, recipientEmails }); await load(); setMessage('草稿已保存'); reset(); setRecordFilter('draft'); setSelectedRecords([]); onViewChange('records'); }
     catch (cause) { setError(cause instanceof Error ? cause.message : '保存失败'); }
     finally { setBusy(false); }
   };
+  const edit = (item: AdminNotification) => {
+    setForm({ id: item.id, kind: item.kind, priority: item.priority, title: item.title, body: item.body, photos: item.photos ?? [], attachments: item.attachments ?? [], dueAt: item.due_at, pinned: Boolean(item.pinned), requiresCompletionProof: Boolean(item.requiresCompletionProof) });
+    insertionPoint.current = item.body.length;
+    setRecipientEmails(item.recipientEmails ?? members.map(member => member.email));
+    setQuery(''); setError(''); setMessage(''); onViewChange('compose');
+  };
+  const confirmRecordAction = async () => {
+    if (!recordAction || busy || processing) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      if (recordAction.type === 'restore') {
+        await request('PATCH', { id: recordAction.id, action: 'restore' });
+        setRecordAction(null); setStats(null); setStatsId(''); setSelectedRecords([]);
+        try {
+          const rows = await load();
+          const restored = rows.find(item => item.id === recordAction.id && item.status === 'draft');
+          if (!restored) throw Error('草稿状态已变化');
+          edit(restored);
+          setMessage('原通知已恢复为草稿，请编辑并保存后重新发布');
+        } catch { setError('原通知已恢复为草稿，但读取内容失败，请刷新页面后在“草稿”中编辑'); }
+      } else {
+        await request('DELETE', { ids: recordAction.ids, category: recordAction.category });
+        setItems(previous => previous.filter(item => !recordAction.ids.includes(item.id)));
+        if (recordAction.ids.includes(statsId)) { setStats(null); setStatsId(''); }
+        if (recordAction.ids.includes(form.id)) reset();
+        setSelectedRecords([]); setRecordAction(null);
+        setMessage(`已删除 ${recordAction.ids.length} 条通知`);
+        try { await onPublished(); } catch { setError('通知已删除，但首页刷新失败，请刷新页面确认'); }
+      }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '操作失败'); }
+    finally { setBusy(false); }
+  };
+  const visibleItems = items.filter(item => matchesFilter(item, recordFilter, now));
+  const deletableFilter = recordFilter === 'expired' || recordFilter === 'withdrawn';
+  const visibleSelection = visibleItems.filter(item => selectedRecords.includes(item.id)).map(item => item.id);
+  const openDelete = (ids: string[], category: 'expired' | 'withdrawn') => { setError(''); setRecordAction({ type: 'delete', ids, category }); };
   const transition = async (id: string, action: 'publish' | 'withdraw') => {
     if (busy || processing) return;
     setBusy(true);
@@ -89,6 +138,7 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
     try { await onPublished(); }
     catch { setError(action === 'publish' ? '已发布，但首页刷新失败，请刷新页面确认' : '已撤回，但首页刷新失败，请刷新页面确认'); return; }
     if (action === 'publish') {
+      setRecordFilter('all'); setSelectedRecords([]);
       try { await loadStats(id); }
       catch { setError('已发布，但统计刷新失败，请稍后重试'); return; }
     }
@@ -122,14 +172,22 @@ export default function NotificationAdmin({ onPublished, view, onViewChange }: {
       {form.kind === 'task' && <label className="field checkbox-field"><input type="checkbox" disabled={busy} checked={form.requiresCompletionProof} onChange={e => setForm({ ...form, requiresCompletionProof: e.target.checked })}/> 须提交完成凭据</label>}
       <label className="field checkbox-field"><input type="checkbox" checked={form.pinned} onChange={e => setForm({ ...form, pinned: e.target.checked })}/> 置顶显示</label>
     </div><button className="primary-button" type="submit" disabled={busy || processing || !membersLoaded || !members.length}>{busy ? '正在保存…' : '保存草稿'}</button>{form.id && <button className="outline-button" type="button" disabled={busy || processing} onClick={reset}>取消编辑</button>}</form>
-    {view === 'records' && <>{recordsLoading && <p className="empty-note" role="status">正在加载通知记录…</p>}<div className="notification-records-list">{items.length ? items.map(item => <article className="notification-record" key={item.id}><div className="admin-notice-row">
-      <div><strong>{item.title}</strong><small>{item.kind === 'task' ? '待办' : '公告'} · {item.priority === 'urgent' ? '紧急' : item.priority === 'important' ? '重要' : '普通'} · {item.status === 'draft' ? '草稿' : item.status === 'published' ? '已发布' : '已撤回'}</small>{item.status === 'draft' && <small>收件人：{item.recipientEmails == null ? '发布时全部活跃成员' : `${item.recipientEmails.length} 人`}</small>}</div>
+    {view === 'records' && <>
+      <nav className="record-filters" aria-label="通知记录分类">{recordFilters.map(filter => <button key={filter.id} type="button" aria-pressed={recordFilter === filter.id} disabled={busy} onClick={() => { setRecordFilter(filter.id); setSelectedRecords([]); setNow(Date.now()); }}>{filter.label}<span>{items.filter(item => matchesFilter(item, filter.id, now)).length}</span></button>)}</nav>
+      {deletableFilter && visibleItems.length > 0 && <div className="record-bulk-actions"><label><input type="checkbox" disabled={busy} checked={visibleSelection.length === visibleItems.length} onChange={e => setSelectedRecords(e.target.checked ? visibleItems.map(item => item.id) : [])}/> 全选</label><span>已选 {visibleSelection.length} 条</span><button className="danger-text" disabled={busy || processing || !visibleSelection.length} onClick={() => openDelete(visibleSelection, recordFilter as 'expired' | 'withdrawn')}>删除所选</button><button className="danger-text" disabled={busy || processing} onClick={() => openDelete(visibleItems.map(item => item.id), recordFilter as 'expired' | 'withdrawn')}>全部删除</button></div>}
+      {recordsLoading && <p className="empty-note" role="status">正在加载通知记录…</p>}<div className="notification-records-list">{visibleItems.length ? visibleItems.map(item => <article className="notification-record" key={item.id}><div className="admin-notice-row">
+      <div className="record-heading">{deletableFilter && <label className="record-selection"><input type="checkbox" aria-label={`选择${item.title}`} disabled={busy} checked={selectedRecords.includes(item.id)} onChange={e => setSelectedRecords(previous => e.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))}/></label>}<div><strong>{item.title}</strong><small>{item.kind === 'task' ? '待办' : '公告'} · {item.priority === 'urgent' ? '紧急' : item.priority === 'important' ? '重要' : '普通'} · {item.status === 'draft' ? '草稿' : item.status === 'published' ? expired(item, now) ? '已发布 · 已逾期' : '已发布' : '已撤回'}</small>{item.status === 'draft' && <small>收件人：{item.recipientEmails == null ? '发布时全部活跃成员' : `${item.recipientEmails.length} 人`}</small>}</div></div>
       <div className="admin-notice-actions">{item.status === 'draft' ? <>
-        <button disabled={!membersLoaded || busy || processing} onClick={() => { setForm({ id: item.id, kind: item.kind, priority: item.priority, title: item.title, body: item.body, photos: item.photos ?? [], attachments: item.attachments ?? [], dueAt: item.due_at, pinned: Boolean(item.pinned), requiresCompletionProof: Boolean(item.requiresCompletionProof) }); insertionPoint.current = item.body.length; setRecipientEmails(item.recipientEmails ?? members.map(member => member.email)); setQuery(''); setError(''); setMessage(''); onViewChange('compose'); }}>编辑</button>
+        <button disabled={!membersLoaded || busy || processing} onClick={() => edit(item)}>编辑</button>
         <button disabled={busy || processing || form.id === item.id} title={form.id === item.id ? '请先保存或取消编辑，再发布通知' : undefined} onClick={() => void transition(item.id, 'publish')}>发布通知</button>
-      </> : item.status === 'published' ? <><button onClick={() => void loadStats(item.id).catch(cause => setError(cause instanceof Error ? cause.message : '统计暂不可用'))}>查看统计</button><button disabled={busy} onClick={() => void transition(item.id, 'withdraw')}>撤回</button></> : null}</div>
+      </> : item.status === 'published' ? <><button disabled={busy} onClick={() => void loadStats(item.id).catch(cause => setError(cause instanceof Error ? cause.message : '统计暂不可用'))}>查看统计</button><button disabled={busy || processing} onClick={() => void transition(item.id, 'withdraw')}>撤回</button></> : <><button disabled={!membersLoaded || busy || processing} onClick={() => { setError(''); setRecordAction({ type: 'restore', id: item.id }); }}>重新编辑</button><button className="danger-text" disabled={busy || processing} onClick={() => openDelete([item.id], 'withdrawn')}>删除</button></>}</div>
     </div>
     {stats && statsId === item.id && item.status === 'published' && <section className="notice-stats"><h3>传达统计</h3><p>已知悉 {stats.acknowledged}/{stats.total}{item.kind === 'task' && <>　已完成 {stats.completed}/{stats.total}</>}</p><div className="stats-lists"><div><strong>尚未知悉</strong>{stats.notAcknowledged.length ? stats.notAcknowledged.map(m => <span key={m.email}>{m.displayName} · {m.email}</span>) : <small>全部已知悉</small>}</div>{item.kind === 'task' && <div><strong>尚未完成</strong>{stats.notCompleted.length ? stats.notCompleted.map(m => <span key={m.email}>{m.displayName} · {m.email}</span>) : <small>全部已完成</small>}</div>}</div><small>通知编号：{statsId}</small></section>}
-    {stats && statsId === item.id && item.status === 'published' && item.kind === 'task' && <section className="completed-recipients"><h3>已完成同学与照片</h3>{stats.completedRecipients?.length ? stats.completedRecipients.map(person => <article className="completed-recipient" key={person.email}><strong>{person.displayName}</strong><small>{person.email} · 完成于 {completedTime.format(new Date(person.completedAt))}</small>{person.photos.length ? <PhotoGallery photos={person.photos} label={`${person.displayName}的完成照片`}/> : <p className="muted">未上传照片</p>}</article>) : <p className="empty-note">暂无已完成同学</p>}</section>}</article>) : !recordsLoading && !error ? <p className="empty-note">还没有通知草稿</p> : null}</div></>}
+    {stats && statsId === item.id && item.status === 'published' && item.kind === 'task' && <section className="completed-recipients"><h3>已完成同学与照片</h3>{stats.completedRecipients?.length ? stats.completedRecipients.map(person => <article className="completed-recipient" key={person.email}><strong>{person.displayName}</strong><small>{person.email} · 完成于 {completedTime.format(new Date(person.completedAt))}</small>{person.photos.length ? <PhotoGallery photos={person.photos} label={`${person.displayName}的完成照片`}/> : <p className="muted">未上传照片</p>}</article>) : <p className="empty-note">暂无已完成同学</p>}</section>}</article>) : !recordsLoading && !error ? <p className="empty-note">{recordFilter === 'all' ? '还没有通知记录' : '当前分类暂无通知'}</p> : null}</div></>}
+    {recordAction && <Modal title={recordAction.type === 'delete' ? '删除通知' : '恢复通知草稿'} busy={busy} onClose={() => { setRecordAction(null); setError(''); }} className="record-confirm-dialog">
+      {recordAction.type === 'delete' ? <><p>确定删除这 {recordAction.ids.length} 条{recordAction.category === 'expired' ? '已逾期' : '已撤回'}通知吗？</p><p className="muted">通知、正文照片及相关知悉、完成和完成凭据记录会一并删除，无法恢复。</p></> : <><p>确定将“{items.find(item => item.id === recordAction.id)?.title}”恢复为草稿吗？</p><p className="muted">正文、通知照片和附件将保留。原有知悉、完成及完成凭据记录会清除，重新发布后重新统计。</p></>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="record-confirm-actions"><button className="outline-button" disabled={busy} onClick={() => { setRecordAction(null); setError(''); }}>取消</button><button className={recordAction.type === 'delete' ? 'primary-button danger-button' : 'primary-button'} disabled={busy} onClick={() => void confirmRecordAction()}>{busy ? '正在处理…' : recordAction.type === 'delete' ? '确认删除' : '恢复并编辑'}</button></div>
+    </Modal>}
   </div>;
 }

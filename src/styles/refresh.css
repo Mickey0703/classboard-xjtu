@@ -297,3 +297,19 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
 }
 .notification-record > .notice-stats { margin-top: 16px; }
 .notification-record:has(> .notice-stats) { padding-bottom: 24px; }
+.record-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.record-filters button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--muted); }
+.record-filters button[aria-pressed="true"] { color: var(--text); border-color: var(--red); background: var(--subtle); }
+.record-filters button span { font-size: 12px; font-variant-numeric: tabular-nums; }
+.record-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; background: var(--subtle); border-radius: 8px; color: var(--muted); }
+.record-bulk-actions label, .record-selection { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.record-bulk-actions button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font: inherit; }
+.record-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.record-heading > div { min-width: 0; overflow-wrap: anywhere; }
+.record-selection { justify-content: center; min-width: 44px; flex: none; }
+.record-selection input, .record-bulk-actions input { width: 18px; height: 18px; accent-color: var(--red); }
+.admin-notice-actions .danger-text, .record-bulk-actions .danger-text { color: var(--red); min-height: 44px; }
+.record-confirm-dialog { width: min(480px, calc(100vw - 32px)); }
+.record-confirm-dialog p { margin: 14px 0; line-height: 1.7; }
+.record-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.record-confirm-actions .danger-button { background: #991e32; border-color: #991e32; color: white; }

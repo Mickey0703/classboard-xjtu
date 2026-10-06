@@ -4,6 +4,7 @@ import { attachmentLinks, resolveAttachments } from '../attachment-helpers';
 
 type Ctx = Parameters<PagesFunction<AdminEnv, string, AdminData>>[0];
 interface Row { id: string; status: 'draft' | 'published' | 'withdrawn'; recipient_emails?: string | null; photos?: string; requires_completion_proof?: number; attachments?: string }
+const serialize = ({ recipient_emails, photos, attachments, requires_completion_proof, ...row }: Row) => ({ ...row, attachments: attachmentLinks(attachments, row.id, true), requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) });
 const author = (context: Ctx) => context.data.cloudflareAccess?.JWT?.payload?.email?.toLowerCase() ?? '';
 const selectedEmails = (emails: string[] | undefined) => emails === undefined ? null : [...new Set(emails.map(email => normalizeEmail(email)!))];
 async function activeSelection(context: Ctx, emails: string[] | null) {
@@ -25,7 +26,7 @@ export const onRequestGet: PagesFunction<AdminEnv, string, AdminData> = async co
       CASE WHEN status='draft' THEN attachments ELSE '[]' END AS attachments,
       CASE WHEN status='draft' THEN recipient_emails ELSE NULL END AS recipient_emails
       FROM notifications ORDER BY COALESCE(published_at, created_at) DESC, id DESC`).all<Row>();
-    return Response.json((result.results ?? []).map(({ recipient_emails, photos, attachments, requires_completion_proof, ...row }) => ({ ...row, attachments: attachmentLinks(attachments, row.id, true), requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) })), { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `records-db;dur=${(performance.now() - started).toFixed(1)}` } });
+    return Response.json((result.results ?? []).map(serialize), { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `records-db;dur=${(performance.now() - started).toFixed(1)}` } });
   } catch { return unavailable(); }
 };
 
@@ -71,10 +72,19 @@ export const onRequestPatch: PagesFunction<AdminEnv, string, AdminData> = async 
   if (!requireAdmin(context)) return denied();
   let body: { id?: unknown; action?: unknown };
   try { body = await context.request.json() as typeof body; } catch { return invalid(); }
-  if (typeof body.id !== 'string' || !['publish', 'withdraw'].includes(String(body.action))) return invalid();
+  if (typeof body.id !== 'string' || !['publish', 'withdraw', 'restore'].includes(String(body.action))) return invalid();
   try {
     const current = await context.env.DB.prepare('SELECT id, status, recipient_emails FROM notifications WHERE id=?').bind(body.id).first<Row>();
     if (!current) return Response.json({ error: '通知不存在' }, { status: 404 });
+    if (body.action === 'restore') {
+      if (current.status !== 'withdrawn') return Response.json({ error: '只能重新编辑已撤回通知' }, { status: 409 });
+      const results = await context.env.DB.batch([
+        context.env.DB.prepare("DELETE FROM notification_recipients WHERE notification_id=? AND EXISTS (SELECT 1 FROM notifications WHERE id=? AND status='withdrawn')").bind(body.id, body.id),
+        context.env.DB.prepare("UPDATE notifications SET status='draft', published_at=NULL, withdrawn_at=NULL WHERE id=? AND status='withdrawn'").bind(body.id)
+      ]);
+      if (results[1].meta?.changes !== 1) return Response.json({ error: '通知状态已变化，请刷新后重试' }, { status: 409 });
+      return Response.json({ id: body.id, status: 'draft' });
+    }
     if (body.action === 'withdraw') {
       if (current.status !== 'published') return Response.json({ error: '只能撤回已发布通知' }, { status: 409 });
       await context.env.DB.prepare('UPDATE notifications SET status=?, withdrawn_at=? WHERE id=? AND status=?').bind('withdrawn', nowShanghai(), body.id, 'published').run();
@@ -99,10 +109,27 @@ export const onRequestPatch: PagesFunction<AdminEnv, string, AdminData> = async 
 
 export const onRequestDelete: PagesFunction<AdminEnv, string, AdminData> = async context => {
   if (!requireAdmin(context)) return denied();
-  let body: { id?: unknown };
+  let body: { id?: unknown; ids?: unknown; category?: unknown };
   try { body = await context.request.json() as typeof body; } catch { return invalid(); }
-  if (typeof body.id !== 'string') return invalid();
   try {
+    if (body.ids !== undefined) {
+      if (!Array.isArray(body.ids) || !body.ids.length || body.ids.some(id => typeof id !== 'string' || !id || id.length > 128) || new Set(body.ids).size !== body.ids.length || !['expired', 'withdrawn'].includes(String(body.category))) return invalid('请选择当前分类中要删除的通知');
+      const ids = JSON.stringify(body.ids);
+      const eligibility = body.category === 'withdrawn' ? "status='withdrawn'" : "status='published' AND kind='task' AND julianday(due_at)<=julianday(?)";
+      const values = body.category === 'withdrawn' ? [] : [new Date().toISOString()];
+      const targets = `SELECT id FROM notifications WHERE id IN (SELECT value FROM json_each(?)) AND ${eligibility}`;
+      // Both statements run in one D1 transaction. Reject the entire selection if
+      // any record is missing, active, or has changed category since confirmation.
+      const guard = `(SELECT COUNT(*) FROM (${targets}))=?`;
+      const args = [ids, ...values, ids, ...values, body.ids.length];
+      const results = await context.env.DB.batch([
+        context.env.DB.prepare(`DELETE FROM notification_recipients WHERE notification_id IN (${targets}) AND ${guard}`).bind(...args),
+        context.env.DB.prepare(`DELETE FROM notifications WHERE id IN (${targets}) AND ${guard}`).bind(...args)
+      ]);
+      if (results[1].meta?.changes !== body.ids.length) return Response.json({ error: '记录状态已变化，未删除任何通知，请刷新后重新选择' }, { status: 409 });
+      return Response.json({ deleted: body.ids.length });
+    }
+    if (typeof body.id !== 'string' || !body.id) return invalid();
     const result = await context.env.DB.prepare('DELETE FROM notifications WHERE id=? AND status=?').bind(body.id, 'draft').run();
     if (result.meta?.changes === 0) return Response.json({ error: '只能删除草稿' }, { status: 409 });
     return Response.json({ id: body.id });

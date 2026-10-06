@@ -9,6 +9,54 @@ function NotificationAdmin({ onPublished, initialView = 'compose' }: { onPublish
   return <><nav><button onClick={() => setView('compose')}>通知</button><button onClick={() => setView('records')}>通知记录</button></nav><NotificationEditor view={view} onViewChange={setView} onPublished={onPublished}/></>;
 }
 
+it('filters records and confirms only the selected expired records for deletion', async () => {
+  let rows = [
+    { id: 'active', title: '进行中的公告', kind: 'notice', status: 'published', due_at: null },
+    { id: 'old', title: '过期待办', kind: 'task', status: 'published', due_at: '2000-01-01T00:00:00+08:00' },
+    { id: 'gone', title: '撤回公告', kind: 'notice', status: 'withdrawn', due_at: null }
+  ];
+  const deletes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [] };
+    if (init?.method === 'DELETE') { const body = JSON.parse(String(init.body)); deletes.push(body); rows = rows.filter(row => !body.ids.includes(row.id)); return { ok: true, json: async () => ({ deleted: body.ids.length }) }; }
+    return { ok: true, json: async () => rows.map(row => ({ ...row, priority: 'normal', body: '', pinned: 0 })) };
+  }));
+  render(<NotificationAdmin onPublished={() => {}} initialView="records"/>);
+  await screen.findByText('进行中的公告');
+  fireEvent.click(screen.getByRole('button', { name: /已逾期/ }));
+  expect(screen.queryByText('进行中的公告')).toBeNull();
+  expect(screen.getByText('过期待办')).toBeTruthy();
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择过期待办' }));
+  fireEvent.click(screen.getByRole('button', { name: /删除所选/ }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }));
+  expect(deletes).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: /全部删除/ }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认删除' }));
+  await screen.findByText('已删除 1 条通知');
+  expect(deletes).toEqual([{ ids: ['old'], category: 'expired' }]);
+  fireEvent.click(screen.getByRole('button', { name: /正在进行/ }));
+  expect(screen.getByText('进行中的公告')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /全部删除/ })).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+it('restores a withdrawn notification into the same draft editor after confirmation', async () => {
+  let restored = false;
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/members')) return { ok: true, json: async () => [{ email: 'a@example.com', displayName: '甲', active: true }] };
+    if (init?.method === 'PATCH') { writes.push(JSON.parse(String(init.body))); restored = true; return { ok: true, json: async () => ({ id: 'original', status: 'draft' }) }; }
+    return { ok: true, json: async () => [{ id: 'original', title: '原通知', kind: 'notice', priority: 'normal', status: restored ? 'draft' : 'withdrawn', body: restored ? '保留的正文' : '', pinned: 0, due_at: null, recipientEmails: ['a@example.com'] }] };
+  }));
+  render(<NotificationAdmin onPublished={() => {}} initialView="records"/>);
+  fireEvent.click(await screen.findByRole('button', { name: '重新编辑' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '恢复并编辑' }));
+  await screen.findByRole('heading', { name: '编辑通知草稿' });
+  expect((screen.getByLabelText('通知正文') as HTMLTextAreaElement).value).toBe('保留的正文');
+  expect(writes).toEqual([{ id: 'original', action: 'restore' }]);
+  vi.unstubAllGlobals();
+});
+
 it('shows statistics and completion photos beneath the selected record and moves them when switching notices', async () => {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/members')) return { ok: true, json: async () => [] };
