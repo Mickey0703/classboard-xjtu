@@ -28,8 +28,8 @@ test('committee publishes a task; a roster member confirms it; committee sees de
 
   await page.context().addCookies([{ name: 'local_member', value: 'member-test', domain: '127.0.0.1', path: '/' }]);
   await page.goto('/');
-  const metric = page.getByRole('status', { name: '未完成待办' });
-  await expect(metric.locator('strong')).toHaveText(/\d+项/);
+  const metric = page.getByRole('status', { name: '未知悉/未完成' });
+  await expect(metric.locator('strong')).toHaveText(/\d+条/);
   const pendingBefore = parseInt(await metric.locator('strong').innerText());
   expect(pendingBefore).toBeGreaterThan(0);
   await page.goto('/?view=notifications');
@@ -39,12 +39,12 @@ test('committee publishes a task; a roster member confirms it; committee sees de
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(card.getByRole('button', { name: '撤销完成' })).toBeVisible();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '今日', exact: true }).click();
-  await expect(metric.locator('strong')).toHaveText(`${pendingBefore - 1}项`);
+  await expect(metric.locator('strong')).toHaveText(`${pendingBefore - 1}条`);
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
   await card.getByRole('button', { name: '撤销完成' }).click();
   await expect(card.getByRole('button', { name: '标记已完成' })).toBeVisible();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '今日', exact: true }).click();
-  await expect(metric.locator('strong')).toHaveText(`${pendingBefore}项`);
+  await expect(metric.locator('strong')).toHaveText(`${pendingBefore}条`);
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
   await card.getByRole('button', { name: '标记已完成' }).click();
   await expect(card.getByRole('button', { name: '撤销完成' })).toBeVisible();

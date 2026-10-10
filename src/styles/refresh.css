@@ -313,3 +313,19 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
 .record-confirm-dialog p { margin: 14px 0; line-height: 1.7; }
 .record-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .record-confirm-actions .danger-button { background: #991e32; border-color: #991e32; color: white; }
+.summary-strip > div { padding: 0; }
+.metric-link { display: flex; align-items: center; gap: 14px; width: 100%; height: 100%; padding: 22px 26px; color: var(--text); text-decoration: none; border-radius: inherit; }
+.metric-link:hover { background: var(--subtle); }
+.metric-link:focus-visible { outline: 3px solid var(--red); outline-offset: -3px; }
+.summary-strip .has-reminders { background: var(--accent-soft); box-shadow: inset 0 -4px var(--red); }
+.has-reminders .metric-link:hover { background: var(--accent-soft); }
+.has-reminders .metric-copy small, .has-reminders .metric-hint { color: var(--red); font-weight: 650; }
+.has-reminders .metric-copy strong { font-size: 40px; font-weight: 750; }
+@media (max-width: 760px) {
+  .metric-link { padding: 17px 12px; gap: 8px; }
+  .has-reminders .metric-copy strong { font-size: 32px; }
+}
+@media (max-width: 360px) {
+  .metric-link { padding: 15px 10px; }
+  .personal-metric .metric-copy small { font-size: 11px; white-space: nowrap; }
+}

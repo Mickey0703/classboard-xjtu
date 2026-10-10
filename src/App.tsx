@@ -8,7 +8,10 @@ import Notifications from './pages/Notifications';
 import type { RecipientStatus, Snapshot } from './domain/types';
 
 export default function App() {
-  const [page, setPage] = useState<Page>(new URLSearchParams(window.location.search).get('view') === 'admin' ? 'admin' : new URLSearchParams(window.location.search).get('view') === 'notifications' ? 'notifications' : 'today');
+  const [page, setPage] = useState<Page>(() => {
+    const view = new URLSearchParams(window.location.search).get('view');
+    return view === 'admin' || view === 'notifications' || view === 'schedule' ? view : 'today';
+  });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState('');
   const [syncWarning, setSyncWarning] = useState(false);

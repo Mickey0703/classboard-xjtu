@@ -1,5 +1,5 @@
 import { ArrowRight, Bell, CalendarDays, CheckCircle2, ClipboardList, CloudSun, Pin, Sparkles } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import type { RecipientStatus, Snapshot } from '../domain/types';
 import type { Page } from '../components/Shell';
 import { getEventStatus } from '../domain/events';
@@ -29,8 +29,15 @@ export default function Today({ snapshot, now, onNavigate, receipts = null, rece
   const upcoming = snapshot.events.filter(e => !e.done && Date.parse(e.dueAt) >= now.getTime()).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const notices = [...snapshot.notifications].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || b.id.localeCompare(a.id));
   const important = notices.find(n => n.priority !== 'normal');
-  const tasks = snapshot.notifications.filter(n => n.kind === 'task');
-  const pendingTasks = tasks.filter(task => receipts?.some(receipt => receipt.notificationId === task.id && !receipt.completedAt)).length;
+  const receiptById = new Map(receipts?.map(receipt => [receipt.notificationId, receipt]));
+  const pendingNotifications = snapshot.notifications.filter(notification => {
+    const receipt = receiptById.get(notification.id);
+    return receipt && (!receipt.acknowledgedAt || (notification.kind === 'task' && !receipt.completedAt));
+  }).length;
+  const navigateMetric = (event: MouseEvent<HTMLAnchorElement>, page: Page) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); onNavigate(page);
+  };
 
   return <div className="page-stack home-page">
     <section className="welcome">
@@ -38,9 +45,9 @@ export default function Today({ snapshot, now, onNavigate, receipts = null, rece
     </section>
     {snapshot.demo && <div className="demo-banner"><Sparkles size={14}/> 演示数据 · 正式通知与事项由班委发布</div>}
     <div className="summary-strip">
-      <div className="personal-metric" role="status" aria-label="未完成待办"><span className="metric-icon"><ClipboardList size={19}/></span><span className="metric-copy"><small>未完成待办</small><strong>{receipts === null ? '—' : pendingTasks}<em>项</em></strong>{receiptStatus === 'guest' ? <a className="metric-hint" href="/api/member/login">登录后查看</a> : receiptStatus === 'loading' ? <span className="metric-hint">正在读取…</span> : receiptStatus === 'error' ? <span className="metric-hint">暂时无法更新</span> : null}</span></div>
-      <div><span className="metric-icon"><Bell size={19}/></span><span className="metric-copy"><small>已发布通知</small><strong>{snapshot.notifications.length}<em>条</em></strong></span></div>
-      <div><span className="metric-icon"><CheckCircle2 size={19}/></span><span className="metric-copy"><small>近期日程</small><strong>{upcoming.length}<em>件</em></strong></span></div>
+      <div><a className="metric-link" href="/?view=notifications" onClick={event => navigateMetric(event, 'notifications')}><span className="metric-icon"><Bell size={19}/></span><span className="metric-copy"><small>已发布通知</small><strong>{snapshot.notifications.length}<em>条</em></strong></span></a></div>
+      <div className={`personal-metric${receipts !== null && pendingNotifications > 0 ? ' has-reminders' : ''}`} role="status" aria-label="未知悉/未完成"><a className="metric-link" href="/?view=notifications" onClick={event => navigateMetric(event, 'notifications')}><span className="metric-icon"><ClipboardList size={19}/></span><span className="metric-copy"><small>未知悉/未完成</small><strong>{receipts === null ? '—' : pendingNotifications}<em>条</em></strong><span className="metric-hint">{receiptStatus === 'guest' ? '登录后查看' : receiptStatus === 'loading' ? '正在读取…' : receiptStatus === 'error' ? '暂时无法更新' : pendingNotifications > 0 ? '请及时查看' : '已全部处理'}</span></span></a></div>
+      <div><a className="metric-link" href="/?view=schedule" onClick={event => navigateMetric(event, 'schedule')}><span className="metric-icon"><CheckCircle2 size={19}/></span><span className="metric-copy"><small>近期日程</small><strong>{upcoming.length}<em>件</em></strong></span></a></div>
     </div>
     {important && <section className="home-notice"><div className="home-notice-symbol"><Bell size={22}/></div><div className="home-notice-copy"><span className="home-notice-label">{important.priority === 'urgent' ? '紧急通知' : '重要通知'}{important.pinned && <><span className="meta-divider"/><Pin size={11}/> 置顶</>}</span><h2>{important.title}</h2><p>{important.body}</p></div><button onClick={() => onNavigate('notifications')}>查看通知 <ArrowRight size={15}/></button></section>}
     <div className="home-workspace">

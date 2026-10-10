@@ -30,7 +30,7 @@ it('offers only today, schedule and notifications in the main navigation', () =>
   expect(screen.getByRole('img', { name: 'ID 2601 班徽' })).toBeTruthy();
 });
 
-it('counts only the signed-in student’s pending published tasks and updates after complete, undo and refocus', async () => {
+it('counts pending notifications for the current student and updates after complete, undo and refocus', async () => {
   const task = { ...snapshot.notifications[0], id: 'pending', kind: 'task' as const, title: '待办 A', dueAt: '2026-12-01T18:00:00+08:00', requiresCompletionProof: false };
   const data = { ...snapshot, notifications: [snapshot.notifications[0], task, { ...task, id: 'done', title: '待办 B' }, { ...task, id: 'other', title: '其他人的待办' }] };
   let completed = false;
@@ -39,15 +39,15 @@ it('counts only the signed-in student’s pending published tasks and updates af
     if (url.endsWith('/api/member/session')) return { ok: true, json: async () => ({ email: 'a@example.com', displayName: '同学 A' }) };
     if (url.endsWith('/api/member/receipt') && init?.method === 'POST') { completed = JSON.parse(String(init.body)).action === 'complete'; return { ok: true }; }
     if (url.endsWith('/api/member/receipt')) return { ok: true, json: async () => [
-      { notificationId: 'pending', acknowledgedAt: null, completedAt: completed ? '2026-10-03T12:00:00+08:00' : null },
+      { notificationId: 'pending', acknowledgedAt: completed ? 'at' : null, completedAt: completed ? '2026-10-03T12:00:00+08:00' : null },
       { notificationId: 'done', acknowledgedAt: 'at', completedAt: 'at' },
       { notificationId: 'withdrawn', acknowledgedAt: null, completedAt: null }
     ] };
     return { ok: false, status: 503 };
   }));
   render(<App />);
-  const metric = () => screen.getByRole('status', { name: '未完成待办' });
-  await waitFor(() => expect(metric().textContent).toContain('1项'));
+  const metric = () => screen.getByRole('status', { name: '未知悉/未完成' });
+  await waitFor(() => expect(metric().textContent).toContain('1条'));
   const nav = within(screen.getByRole('navigation', { name: '主导航' }));
   fireEvent.click(nav.getByRole('button', { name: '通知' }));
   await screen.findByText(/同学 A/);
@@ -55,15 +55,38 @@ it('counts only the signed-in student’s pending published tasks and updates af
   fireEvent.click(card().getByRole('button', { name: '标记已完成' }));
   await card().findByRole('button', { name: '撤销完成' });
   fireEvent.click(nav.getByRole('button', { name: '今日' }));
-  expect(metric().textContent).toContain('0项');
+  expect(metric().textContent).toContain('0条');
   fireEvent.click(nav.getByRole('button', { name: '通知' }));
   fireEvent.click(await card().findByRole('button', { name: '撤销完成' }));
   await card().findByRole('button', { name: '标记已完成' });
   fireEvent.click(nav.getByRole('button', { name: '今日' }));
-  expect(metric().textContent).toContain('1项');
+  expect(metric().textContent).toContain('1条');
   completed = true;
   fireEvent(window, new Event('focus'));
-  await waitFor(() => expect(metric().textContent).toContain('0项'));
+  await waitFor(() => expect(metric().textContent).toContain('0条'));
+  vi.unstubAllGlobals();
+});
+
+it('counts unread notices and unfinished tasks once each and links all three metrics in the new order', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+  const data = { ...snapshot, notifications: ['unread', 'both', 'unfinished', 'completedUnread', 'done', 'other'].map((id, index) => ({ ...snapshot.notifications[0], id, kind: index === 0 ? 'notice' as const : 'task' as const })) };
+  const receipts = [
+    { notificationId: 'unread', acknowledgedAt: null, completedAt: null },
+    { notificationId: 'both', acknowledgedAt: null, completedAt: null },
+    { notificationId: 'unfinished', acknowledgedAt: 'at', completedAt: null },
+    { notificationId: 'completedUnread', acknowledgedAt: null, completedAt: 'at' },
+    { notificationId: 'done', acknowledgedAt: 'at', completedAt: 'at' },
+    { notificationId: 'withdrawn', acknowledgedAt: null, completedAt: null }
+  ];
+  const navigate = vi.fn();
+  const { container } = render(<Today snapshot={data} now={new Date('2026-09-29T03:00:00Z')} receipts={receipts} receiptStatus="ready" onNavigate={navigate}/>);
+  expect(screen.getByRole('status', { name: '未知悉/未完成' }).textContent).toContain('4条');
+  const links = within(container.querySelector('.summary-strip') as HTMLElement).getAllByRole('link');
+  expect(links.map(link => link.textContent)).toEqual([expect.stringContaining('已发布通知'), expect.stringContaining('未知悉/未完成'), expect.stringContaining('近期日程')]);
+  expect(links.map(link => link.getAttribute('href'))).toEqual(['/?view=notifications', '/?view=notifications', '/?view=schedule']);
+  links.forEach(link => fireEvent.click(link));
+  expect(navigate.mock.calls).toEqual([['notifications'], ['notifications'], ['schedule']]);
+  await screen.findByText('天气暂不可用');
   vi.unstubAllGlobals();
 });
 
