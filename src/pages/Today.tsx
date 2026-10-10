@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, CalendarDays, CheckCircle2, ClipboardList, CloudSun, Pin, Sparkles } from 'lucide-react';
+import { ArrowRight, Bell, BellRing, CalendarDays, CheckCircle2, ClipboardList, CloudSun, Pin, Sparkles } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import type { RecipientStatus, Snapshot } from '../domain/types';
 import type { Page } from '../components/Shell';
@@ -40,6 +40,7 @@ export default function Today({ snapshot, now, onNavigate, receipts = null, rece
   };
 
   return <div className="page-stack home-page">
+    {receipts !== null && pendingNotifications > 0 && <section className="home-reminder" aria-label="待处理通知提醒"><a href="/?view=notifications" onClick={event => navigateMetric(event, 'notifications')}><BellRing className="home-reminder-icon" size={32}/><span className="home-reminder-copy"><span>你有 <strong>{pendingNotifications}</strong> 条通知需要处理</span><small>请确认知悉通知，并完成待办事项</small></span><span className="home-reminder-action">立即查看 <ArrowRight size={18}/></span></a></section>}
     <section className="welcome">
       <div className="welcome-copy"><span className="eyebrow"><CalendarDays size={14}/> {dayFmt.format(now)}</span><div className="welcome-message"><div className="welcome-message-copy" ref={messageRef}><h1>今天的班务</h1><p>班级的重要消息与近期安排，都在这里。</p></div><a className="identity-strip" href="/class-emblem.png" target="_blank" rel="noreferrer" aria-label="查看 ID 2601 完整班徽"><div className="identity-art"><ClassEmblem/></div><div className="identity-copy"><strong>ID 2601</strong><span>XJTU–POLIMI JOINT SCHOOL</span></div></a></div><div className="welcome-actions"><button onClick={() => onNavigate('notifications')}>查看全部通知 <ArrowRight size={16}/></button><button onClick={() => onNavigate('schedule')}>查看日程</button></div></div>
     </section>

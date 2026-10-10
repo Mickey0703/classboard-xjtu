@@ -79,13 +79,19 @@ it('counts unread notices and unfinished tasks once each and links all three met
     { notificationId: 'withdrawn', acknowledgedAt: null, completedAt: null }
   ];
   const navigate = vi.fn();
-  const { container } = render(<Today snapshot={data} now={new Date('2026-09-29T03:00:00Z')} receipts={receipts} receiptStatus="ready" onNavigate={navigate}/>);
+  const { container, rerender } = render(<Today snapshot={data} now={new Date('2026-09-29T03:00:00Z')} receipts={receipts} receiptStatus="ready" onNavigate={navigate}/>);
   expect(screen.getByRole('status', { name: '未知悉/未完成' }).textContent).toContain('4条');
   const links = within(container.querySelector('.summary-strip') as HTMLElement).getAllByRole('link');
   expect(links.map(link => link.textContent)).toEqual([expect.stringContaining('已发布通知'), expect.stringContaining('未知悉/未完成'), expect.stringContaining('近期日程')]);
   expect(links.map(link => link.getAttribute('href'))).toEqual(['/?view=notifications', '/?view=notifications', '/?view=schedule']);
   links.forEach(link => fireEvent.click(link));
   expect(navigate.mock.calls).toEqual([['notifications'], ['notifications'], ['schedule']]);
+  const banner = screen.getByRole('region', { name: '待处理通知提醒' });
+  expect(banner.textContent).toContain('你有 4 条通知需要处理');
+  fireEvent.click(within(banner).getByRole('link'));
+  expect(navigate).toHaveBeenLastCalledWith('notifications');
+  rerender(<Today snapshot={data} now={new Date('2026-09-29T03:00:00Z')} receipts={receipts.map(receipt => ({ ...receipt, acknowledgedAt: 'at', completedAt: 'at' }))} receiptStatus="ready" onNavigate={navigate}/>);
+  expect(screen.queryByRole('region', { name: '待处理通知提醒' })).toBeNull();
   await screen.findByText('天气暂不可用');
   vi.unstubAllGlobals();
 });

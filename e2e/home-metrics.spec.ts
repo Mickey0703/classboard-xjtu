@@ -19,9 +19,15 @@ test('home metrics count unread or unfinished notices and link to their pages at
     await page.goto('/');
     const summary = page.locator('.summary-strip');
     await expect(page.getByRole('status', { name: '未知悉/未完成' }).locator('strong')).toHaveText('2条');
+    const reminder = page.getByRole('region', { name: '待处理通知提醒' });
+    await expect(reminder).toContainText('你有 2 条通知需要处理');
+    await reminder.screenshot({ path: `test-results/home-reminder-${width}.png` });
     expect(await summary.getByRole('link').allTextContents()).toEqual([expect.stringContaining('已发布通知'), expect.stringContaining('未知悉/未完成'), expect.stringContaining('近期日程')]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await summary.screenshot({ path: `test-results/home-metrics-${width}.png` });
+    await reminder.getByRole('link').click();
+    await expect(page.getByRole('heading', { name: '班级通知', exact: true })).toBeVisible();
+    await page.goto('/');
     await summary.getByRole('link', { name: /未知悉\/未完成/ }).click();
     await expect(page.getByRole('heading', { name: '班级通知', exact: true })).toBeVisible();
     await page.goto('/');
