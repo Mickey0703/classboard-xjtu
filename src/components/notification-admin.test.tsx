@@ -30,7 +30,7 @@ it('filters records and confirms only the selected expired records for deletion'
   fireEvent.click(screen.getByRole('button', { name: /删除所选/ }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }));
   expect(deletes).toHaveLength(0);
-  fireEvent.click(screen.getByRole('button', { name: /全部删除/ }));
+  fireEvent.click(screen.getByRole('button', { name: '删除所有已逾期通知' }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认删除' }));
   await screen.findByText('已删除 1 条通知');
   expect(deletes).toEqual([{ ids: ['old'], category: 'expired' }]);
@@ -87,12 +87,12 @@ it('offers a proof requirement only for tasks, restores it for drafts and clears
   render(<NotificationAdmin onPublished={() => {}} />);
   expect(screen.queryByRole('checkbox', { name: '须提交完成凭据' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '通知记录' }));
-  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
+  fireEvent.click(await screen.findByRole('button', { name: '编辑草稿' }));
   expect((screen.getByRole('checkbox', { name: '须提交完成凭据' }) as HTMLInputElement).checked).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
   await screen.findByText('草稿已保存');
   expect(writes[0]).toMatchObject({ kind: 'task', requiresCompletionProof: true });
-  fireEvent.click(screen.getByRole('button', { name: '编辑' }));
+  fireEvent.click(screen.getByRole('button', { name: '编辑草稿' }));
   fireEvent.change(screen.getByLabelText('类型'), { target: { value: 'notice' } });
   expect(screen.queryByRole('checkbox', { name: '须提交完成凭据' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
@@ -110,7 +110,7 @@ it('restores draft photos in the body preview and allows removing them before sa
     return { ok: true, json: async () => [{ id: 'n1', kind: 'notice', priority: 'normal', title: '图文通知', body: '前文后文', photos: [photo], due_at: null, pinned: 0, status: 'draft' }] };
   }));
   render(<NotificationAdmin onPublished={() => {}} initialView="records"/>);
-  fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
+  fireEvent.click(await screen.findByRole('button', { name: '编辑草稿' }));
   expect(screen.getByRole('img', { name: '通知照片 1' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '删除照片 1' }));
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
@@ -217,9 +217,9 @@ it('saves individual recipients, selects all active members, and restores the dr
   fireEvent.change(screen.getByLabelText('通知标题'), { target: { value: '选择测试' } });
   fireEvent.change(screen.getByLabelText('通知正文'), { target: { value: '内容' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
-  await screen.findByRole('button', { name: '编辑' });
+  await screen.findByRole('button', { name: '编辑草稿' });
   expect(requests[0].recipientEmails).toEqual(['a@example.com']);
-  fireEvent.click(screen.getByRole('button', { name: '编辑' }));
+  fireEvent.click(screen.getByRole('button', { name: '编辑草稿' }));
   expect(screen.getByText('已选 1 / 2 人')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '全选' }));
   expect(screen.getByText('已选 2 / 2 人')).toBeTruthy();
@@ -230,11 +230,12 @@ it('refreshes the shared public snapshot after withdrawal', async () => {
   let row: Record<string, unknown> = { id: 'n3', kind: 'notice', priority: 'urgent', title: '撤回测试', body: '内容', due_at: null, pinned: 1, status: 'published' };
   const onChanged = vi.fn();
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
-    if (init?.method === 'PATCH') { row = { ...row, status: 'withdrawn' }; return { ok: true, json: async () => ({ id: 'n3', status: 'withdrawn' }) }; }
+    if (init?.method === 'PATCH') { row = { ...row, status: 'draft' }; return { ok: true, json: async () => ({ id: 'n3', status: 'draft' }) }; }
     return { ok: true, json: async () => [row] };
   }));
   render(<NotificationAdmin onPublished={onChanged} initialView="records"/>);
-  fireEvent.click(await screen.findByRole('button', { name: '撤回' }));
+  fireEvent.click(await screen.findByRole('button', { name: '撤回并编辑' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认撤回并编辑' }));
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   vi.unstubAllGlobals();
 });

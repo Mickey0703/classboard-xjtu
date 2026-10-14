@@ -19,7 +19,7 @@ test('committee uploads an inline file, students download identical bytes and wi
   await page.reload();
   const menus = page.getByRole('navigation', { name: '班委管理菜单' });
   await menus.getByRole('button', { name: '通知记录', exact: true }).click();
-  await row.getByRole('button', { name: '编辑', exact: true }).click();
+  await row.getByRole('button', { name: '编辑草稿', exact: true }).click();
   await expect(page.getByRole('link', { name: /报名模板.csv/ })).toBeVisible();
   await page.getByRole('button', { name: '删除文件 报名模板.csv' }).click();
   await expect(page.getByRole('link', { name: /报名模板.csv/ })).toHaveCount(0);
@@ -31,8 +31,8 @@ test('committee uploads an inline file, students download identical bytes and wi
   expect(draft.attachments[0].position).toBe(6);
   const anonymous = await browser.newContext();
   try {
-    expect((await anonymous.request.get(`http://127.0.0.1:8788/api/admin/notification-file?id=${draft.attachments[0].id}`)).status()).toBe(403);
-    expect((await anonymous.request.get(`http://127.0.0.1:8788/api/notification-file?notificationId=${id}&id=${draft.attachments[0].id}`)).status()).toBe(404);
+    expect((await anonymous.request.get(`${new URL(page.url()).origin}/api/admin/notification-file?id=${draft.attachments[0].id}`)).status()).toBe(403);
+    expect((await anonymous.request.get(`${new URL(page.url()).origin}/api/notification-file?notificationId=${id}&id=${draft.attachments[0].id}`)).status()).toBe(404);
   } finally { await anonymous.close(); }
   await row.getByRole('button', { name: '发布通知' }).click();
   await expect(row.getByText(/已发布/)).toBeVisible();
@@ -60,7 +60,8 @@ test('committee uploads an inline file, students download identical bytes and wi
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.goto('/?view=admin');
   await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
-  await row.getByRole('button', { name: '撤回' }).click();
-  await expect(row.getByText(/已撤回/)).toBeVisible();
+  await row.getByRole('button', { name: '撤回并编辑' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认撤回并编辑' }).click();
+  await expect(page.getByRole('heading', { name: '编辑通知草稿' })).toBeVisible();
   expect((await request.get(href!)).status()).toBe(404);
 });

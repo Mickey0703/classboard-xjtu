@@ -34,6 +34,65 @@ function setup() {
 }
 const draft = { kind: 'notice', priority: 'normal', title: '通知', body: '内容', dueAt: null, pinned: false };
 
+it('directly withdraws to the same draft and clears receipts in one transaction', async () => {
+  const { sqlite, context, db } = setup();
+  try {
+    const { id } = await (await onRequestPost(context('POST', draft))).json() as { id: string };
+    await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+    expect((await onRequestPatch(context('PATCH', { id, action: 'withdraw-edit' }))).status).toBe(200);
+    expect(sqlite.prepare('SELECT status, body, published_at FROM notifications WHERE id=?').get(id)).toMatchObject({ status: 'draft', body: draft.body, published_at: null });
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients WHERE notification_id=?').get(id)?.count).toBe(0);
+    expect((await loadSnapshot(db as unknown as D1Database)).notifications).toHaveLength(0);
+    expect((await onRequestPatch(context('PATCH', { id, action: 'withdraw-edit' }))).status).toBe(409);
+  } finally { sqlite.close(); }
+});
+
+it('deletes single records and their receipts at every status while preserving other notifications', async () => {
+  const { sqlite, context } = setup();
+  sqlite.exec('PRAGMA foreign_keys=ON');
+  try {
+    const keep = await (await onRequestPost(context('POST', draft))).json() as { id: string };
+    for (const status of ['draft', 'published', 'withdrawn']) {
+      const { id } = await (await onRequestPost(context('POST', draft))).json() as { id: string };
+      if (status !== 'draft') await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+      if (status === 'withdrawn') await onRequestPatch(context('PATCH', { id, action: 'withdraw' }));
+      expect((await onRequestDelete(context('DELETE', { id }))).status).toBe(200);
+      expect(sqlite.prepare('SELECT id FROM notifications WHERE id=?').get(id)).toBeUndefined();
+      expect(sqlite.prepare('SELECT notification_id FROM notification_recipients WHERE notification_id=?').get(id)).toBeUndefined();
+    }
+    expect(sqlite.prepare('SELECT id FROM notifications').all()).toEqual([{ id: keep.id }]);
+    expect((await onRequestDelete(context('DELETE', { id: 'missing' }))).status).toBe(404);
+    expect((await onRequestDelete({ ...(context('DELETE', { id: keep.id }) as object), data: {} } as never)).status).toBe(403);
+  } finally { sqlite.close(); }
+});
+
+it('does not withdraw a newer publication or clear its receipts when a previous request is delayed', async () => {
+  const { sqlite, context, db } = setup();
+  try {
+    const { id } = await (await onRequestPost(context('POST', draft))).json() as { id: string };
+    await onRequestPatch(context('PATCH', { id, action: 'publish' }));
+    const previous = sqlite.prepare('SELECT published_at FROM notifications WHERE id=?').get(id)?.published_at;
+    let changed = false;
+    const concurrent = { ...db, prepare: (sql: string) => {
+      const statement = db.prepare(sql);
+      if (!sql.startsWith('SELECT id, status, recipient_emails')) return statement;
+      return { ...statement, bind: (...args: never[]) => {
+        const bound = statement.bind(...args);
+        return { ...bound, first: async () => {
+          const row = await bound.first();
+          if (!changed) { changed = true; sqlite.prepare("UPDATE notifications SET published_at='2099-01-01T08:00:00+08:00' WHERE id=?").run(id); }
+          return row;
+        } };
+      } };
+    } };
+    const race = { ...(context('PATCH', { id, action: 'withdraw-edit' }) as unknown as { env: Record<string, unknown> }), env: { DB: concurrent, ADMIN_EMAILS: 'admin@example.com' } } as never;
+    expect((await onRequestPatch(race)).status).toBe(409);
+    expect(sqlite.prepare('SELECT status FROM notifications WHERE id=?').get(id)?.status).toBe('published');
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM notification_recipients WHERE notification_id=?').get(id)?.count).toBe(2);
+    expect((await onRequestPatch(context('PATCH', { id, action: 'withdraw-edit', publishedAt: previous }))).status).toBe(409);
+  } finally { sqlite.close(); }
+});
+
 it('restores the withdrawn record as a draft with its content and resets receipts before republishing', async () => {
   const { sqlite, context } = setup();
   try {

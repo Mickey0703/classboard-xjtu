@@ -20,10 +20,10 @@ it('separates notice composition from records and opens a draft for editing from
   fireEvent.click(menus.getByRole('button', { name: '通知记录' }));
   expect(await screen.findByText('已有草稿')).toBeTruthy();
   expect(screen.queryByRole('textbox', { name: '通知正文' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: '编辑' }));
+  fireEvent.click(screen.getByRole('button', { name: '编辑草稿' }));
   expect((screen.getByLabelText('通知标题') as HTMLInputElement).value).toBe('已有草稿');
   expect((screen.getByLabelText('通知正文') as HTMLTextAreaElement).value).toBe('草稿正文');
-  expect(screen.queryByRole('button', { name: '发布通知' })).toBeNull();
+  expect(screen.getByRole('button', { name: '发布通知' })).toBeTruthy();
   vi.unstubAllGlobals();
 });
 

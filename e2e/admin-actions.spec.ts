@@ -1,0 +1,55 @@
+import { expect, test } from '@playwright/test';
+
+test('committee directly publishes after confirmation, cancels edits to records, toggles stats and deletes records', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.context().addCookies([{ name: 'local_admin', value: 'test-token', domain: '127.0.0.1', path: '/' }]);
+  const title = `直接发布测试 ${Date.now()}`;
+  let id = '';
+  const records = () => page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true });
+  const row = page.locator('.admin-notice-row').filter({ hasText: title });
+  try {
+    await page.goto('/?view=admin');
+    await page.getByLabel('通知标题').fill(title);
+    await page.getByLabel('通知正文').fill('直接发布的正文');
+    await expect(page.getByRole('button', { name: '保存草稿' })).toBeVisible();
+    await page.getByRole('button', { name: '发布通知', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: '发布通知', exact: true })).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
+    const before = await (await page.request.get('/api/admin/notifications')).json() as { id: string; title: string }[];
+    expect(before.some(item => item.title === title)).toBe(false);
+    await page.getByRole('button', { name: '发布通知', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '确认发布' }).click();
+    await expect(page.getByText('通知已发布', { exact: true })).toBeVisible();
+    await expect(row.getByText('已发布', { exact: false })).toBeVisible();
+    const after = await (await page.request.get('/api/admin/notifications')).json() as { id: string; title: string }[];
+    id = after.find(item => item.title === title)!.id;
+    const stats = row.getByRole('button', { name: '查看统计' });
+    await stats.click();
+    await expect(page.getByRole('heading', { name: '传达统计' })).toBeVisible();
+    await stats.click();
+    await expect(page.getByRole('heading', { name: '传达统计' })).toHaveCount(0);
+    await row.getByRole('button', { name: '撤回并编辑' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '确认撤回并编辑' }).click();
+    await expect(page.getByLabel('通知正文')).toHaveValue('直接发布的正文');
+    await page.getByLabel('通知正文').fill('不保存的内容');
+    await page.getByRole('button', { name: '取消编辑' }).click();
+    await expect(page.getByRole('heading', { name: '通知记录', exact: true })).toBeVisible();
+    await row.getByRole('button', { name: '编辑草稿' }).click();
+    await expect(page.getByLabel('通知正文')).toHaveValue('直接发布的正文');
+    await page.getByRole('button', { name: '取消编辑' }).click();
+    await expect(row.getByRole('button', { name: '删除', exact: true })).toBeVisible();
+    await page.screenshot({ path: 'test-results/admin-actions-mobile.png', fullPage: true });
+    await row.getByRole('button', { name: '发布通知' }).click();
+    await expect(row.getByRole('button', { name: '查看统计' })).toBeVisible();
+    await row.getByRole('button', { name: '删除', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
+    await expect(row).toBeVisible();
+    await row.getByRole('button', { name: '删除', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click();
+    await expect(row).toHaveCount(0);
+    await records().click();
+    const publicData = await (await page.request.get('/api/snapshot')).json() as { notifications: { id: string }[] };
+    expect(publicData.notifications.some(item => item.id === id)).toBe(false);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  } finally { if (id) await page.request.delete('/api/admin/notifications', { data: { id } }); }
+});

@@ -28,8 +28,15 @@ test('mobile committee filters records, restores the same draft and confirms sco
   await page.getByRole('button', { name: '保存草稿' }).click();
   await row.getByRole('button', { name: '发布通知' }).click();
   await expect(row.getByText('已发布')).toBeVisible();
-  await row.getByRole('button', { name: '撤回' }).click();
-  await expect(row.getByText('已撤回')).toBeVisible();
+  await row.getByRole('button', { name: '撤回并编辑' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认撤回并编辑' }).click();
+  await expect(page.getByLabel('通知正文')).toHaveValue('原通知正文');
+  await page.getByRole('button', { name: '保存草稿' }).click();
+  await row.getByRole('button', { name: '发布通知' }).click();
+  await expect(row.getByText('已发布')).toBeVisible();
+  await page.request.patch('/api/admin/notifications', { data: { id: withdrawn, action: 'withdraw' } });
+  await page.reload();
+  await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await filters.getByRole('button', { name: /已撤回/ }).click();
   await row.getByRole('checkbox').check();
   await page.getByRole('button', { name: '删除所选' }).click();
@@ -42,7 +49,7 @@ test('mobile committee filters records, restores the same draft and confirms sco
   await expect(page.getByText(`${prefix} 逾期`, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/record-management-mobile.png', fullPage: true });
-  await page.getByRole('button', { name: '全部删除', exact: true }).click();
+  await page.getByRole('button', { name: '删除所有已逾期通知', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click();
   await expect(page.getByText('当前分类暂无通知')).toBeVisible();
   const after = await (await page.request.get('/api/admin/notifications')).json() as { id: string }[];

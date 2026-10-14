@@ -28,7 +28,7 @@ test('imports a roster file and publishes only to the selected member on mobile'
   await expect(row.getByText('收件人：1 人')).toBeVisible();
   await page.reload();
   await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
-  await row.getByRole('button', { name: '编辑' }).click();
+  await row.getByRole('button', { name: '编辑草稿' }).click();
   await expect(page.getByText('已选 1 / 2 人')).toBeVisible();
   await page.getByRole('button', { name: '取消编辑' }).click();
   await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
@@ -44,5 +44,7 @@ test('imports a roster file and publishes only to the selected member on mobile'
   await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await row.getByRole('button', { name: '查看统计' }).click();
   await expect(page.getByText('已知悉 1/1')).toBeVisible();
-  await row.getByRole('button', { name: '撤回' }).click();
+  await row.getByRole('button', { name: '撤回并编辑' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认撤回并编辑' }).click();
+  await expect(page.getByRole('heading', { name: '编辑通知草稿' })).toBeVisible();
 });

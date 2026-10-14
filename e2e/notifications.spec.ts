@@ -56,8 +56,9 @@ test('committee publishes a task; a roster member confirms it; committee sees de
   await expect(page.getByText(/已知悉 1\/2/)).toBeVisible();
   await expect(page.getByText(/已完成 1\/2/)).toBeVisible();
   await page.screenshot({ path: 'test-results/notification-stats-mobile.png', fullPage: true });
-  await page.locator('.admin-notice-row').filter({ hasText: title }).getByRole('button', { name: '撤回' }).click();
-  await expect(page.locator('.admin-notice-row').filter({ hasText: title }).getByText('已撤回')).toBeVisible();
+  await page.locator('.admin-notice-row').filter({ hasText: title }).getByRole('button', { name: '撤回并编辑' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认撤回并编辑' }).click();
+  await expect(page.getByRole('heading', { name: '编辑通知草稿' })).toBeVisible();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '通知', exact: true }).click();
   await expect(page.getByText(title)).toHaveCount(0);
   const publicSnapshot = await (await request.get('/api/snapshot')).json() as { notifications: { title: string }[] };

@@ -22,7 +22,7 @@ test('inline photos survive drafts; required proof is enforced and appears priva
   await expect(row).toBeVisible();
   await page.reload();
   await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
-  await row.getByRole('button', { name: '编辑' }).click();
+  await row.getByRole('button', { name: '编辑草稿' }).click();
   await expect(page.getByRole('checkbox', { name: '须提交完成凭据' })).toBeChecked();
   await expect(page.getByRole('img', { name: '通知照片 1', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '取消编辑' }).click();
@@ -74,9 +74,9 @@ test('inline photos survive drafts; required proof is enforced and appears priva
   expect(publicSnapshot).not.toContain(receipt.photos[0].id);
   const anonymous = await browser.newContext();
   try {
-    expect((await anonymous.request.get('http://127.0.0.1:8788/api/member/receipt')).status()).toBe(403);
-    expect((await anonymous.request.get(`http://127.0.0.1:8788/api/admin/notification-stats?id=${notice.id}`)).status()).toBe(403);
-    expect((await anonymous.request.get(`http://127.0.0.1:8788${receipt.photos[0].dataUrl}`)).status()).toBe(403);
+    expect((await anonymous.request.get(`${new URL(page.url()).origin}/api/member/receipt`)).status()).toBe(403);
+    expect((await anonymous.request.get(`${new URL(page.url()).origin}/api/admin/notification-stats?id=${notice.id}`)).status()).toBe(403);
+    expect((await anonymous.request.get(`${new URL(page.url()).origin}${receipt.photos[0].dataUrl}`)).status()).toBe(403);
   } finally { await anonymous.close(); }
 
   await page.goto('/?view=admin');
@@ -97,5 +97,7 @@ test('inline photos survive drafts; required proof is enforced and appears priva
   await page.getByRole('navigation', { name: '班委管理菜单' }).getByRole('button', { name: '通知记录', exact: true }).click();
   await row.getByRole('button', { name: '查看统计' }).click();
   await expect(page.getByText('暂无已完成同学')).toBeVisible();
-  await row.getByRole('button', { name: '撤回' }).click();
+  await row.getByRole('button', { name: '撤回并编辑' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认撤回并编辑' }).click();
+  await expect(page.getByRole('heading', { name: '编辑通知草稿' })).toBeVisible();
 });

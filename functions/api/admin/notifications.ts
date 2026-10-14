@@ -3,7 +3,7 @@ import { normalizeEmail, nowShanghai, validNotification } from './notification-h
 import { attachmentLinks, resolveAttachments } from '../attachment-helpers';
 
 type Ctx = Parameters<PagesFunction<AdminEnv, string, AdminData>>[0];
-interface Row { id: string; status: 'draft' | 'published' | 'withdrawn'; recipient_emails?: string | null; photos?: string; requires_completion_proof?: number; attachments?: string }
+interface Row { id: string; status: 'draft' | 'published' | 'withdrawn'; published_at?: string | null; recipient_emails?: string | null; photos?: string; requires_completion_proof?: number; attachments?: string }
 const serialize = ({ recipient_emails, photos, attachments, requires_completion_proof, ...row }: Row) => ({ ...row, attachments: attachmentLinks(attachments, row.id, true), requiresCompletionProof: Boolean(requires_completion_proof), photos: JSON.parse(photos ?? '[]'), recipientEmails: recipient_emails == null ? null : JSON.parse(recipient_emails) });
 const author = (context: Ctx) => context.data.cloudflareAccess?.JWT?.payload?.email?.toLowerCase() ?? '';
 const selectedEmails = (emails: string[] | undefined) => emails === undefined ? null : [...new Set(emails.map(email => normalizeEmail(email)!))];
@@ -70,17 +70,20 @@ export const onRequestPut: PagesFunction<AdminEnv, string, AdminData> = async co
 
 export const onRequestPatch: PagesFunction<AdminEnv, string, AdminData> = async context => {
   if (!requireAdmin(context)) return denied();
-  let body: { id?: unknown; action?: unknown };
+  let body: { id?: unknown; action?: unknown; publishedAt?: unknown };
   try { body = await context.request.json() as typeof body; } catch { return invalid(); }
-  if (typeof body.id !== 'string' || !['publish', 'withdraw', 'restore'].includes(String(body.action))) return invalid();
+  if (typeof body.id !== 'string' || !['publish', 'withdraw', 'restore', 'withdraw-edit'].includes(String(body.action))) return invalid();
   try {
-    const current = await context.env.DB.prepare('SELECT id, status, recipient_emails FROM notifications WHERE id=?').bind(body.id).first<Row>();
+    const current = await context.env.DB.prepare('SELECT id, status, recipient_emails, published_at FROM notifications WHERE id=?').bind(body.id).first<Row>();
     if (!current) return Response.json({ error: '通知不存在' }, { status: 404 });
-    if (body.action === 'restore') {
-      if (current.status !== 'withdrawn') return Response.json({ error: '只能重新编辑已撤回通知' }, { status: 409 });
+    if (body.action === 'restore' || body.action === 'withdraw-edit') {
+      const expectedStatus = body.action === 'restore' ? 'withdrawn' : 'published';
+      if (current.status !== expectedStatus) return Response.json({ error: body.action === 'restore' ? '只能重新编辑已撤回通知' : '只能撤回并编辑已发布通知' }, { status: 409 });
+      const publication = current.published_at ?? null;
+      if (body.publishedAt !== undefined && body.publishedAt !== publication) return Response.json({ error: '通知已重新发布，请刷新记录后重试' }, { status: 409 });
       const results = await context.env.DB.batch([
-        context.env.DB.prepare("DELETE FROM notification_recipients WHERE notification_id=? AND EXISTS (SELECT 1 FROM notifications WHERE id=? AND status='withdrawn')").bind(body.id, body.id),
-        context.env.DB.prepare("UPDATE notifications SET status='draft', published_at=NULL, withdrawn_at=NULL WHERE id=? AND status='withdrawn'").bind(body.id)
+        context.env.DB.prepare('DELETE FROM notification_recipients WHERE notification_id=? AND EXISTS (SELECT 1 FROM notifications WHERE id=? AND status=? AND published_at IS ?)').bind(body.id, body.id, expectedStatus, publication),
+        context.env.DB.prepare("UPDATE notifications SET status='draft', published_at=NULL, withdrawn_at=NULL WHERE id=? AND status=? AND published_at IS ?").bind(body.id, expectedStatus, publication)
       ]);
       if (results[1].meta?.changes !== 1) return Response.json({ error: '通知状态已变化，请刷新后重试' }, { status: 409 });
       return Response.json({ id: body.id, status: 'draft' });
@@ -129,9 +132,12 @@ export const onRequestDelete: PagesFunction<AdminEnv, string, AdminData> = async
       if (results[1].meta?.changes !== body.ids.length) return Response.json({ error: '记录状态已变化，未删除任何通知，请刷新后重新选择' }, { status: 409 });
       return Response.json({ deleted: body.ids.length });
     }
-    if (typeof body.id !== 'string' || !body.id) return invalid();
-    const result = await context.env.DB.prepare('DELETE FROM notifications WHERE id=? AND status=?').bind(body.id, 'draft').run();
-    if (result.meta?.changes === 0) return Response.json({ error: '只能删除草稿' }, { status: 409 });
+    if (typeof body.id !== 'string' || !body.id || body.id.length > 128) return invalid();
+    const results = await context.env.DB.batch([
+      context.env.DB.prepare('DELETE FROM notification_recipients WHERE notification_id=?').bind(body.id),
+      context.env.DB.prepare('DELETE FROM notifications WHERE id=?').bind(body.id)
+    ]);
+    if (results[1].meta?.changes === 0) return Response.json({ error: '通知不存在或已删除' }, { status: 404 });
     return Response.json({ id: body.id });
   } catch { return unavailable(); }
 };
