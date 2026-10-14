@@ -317,13 +317,12 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
 .metric-link { display: flex; align-items: center; gap: 14px; width: 100%; height: 100%; padding: 22px 26px; color: var(--text); text-decoration: none; border-radius: inherit; }
 .metric-link:hover { background: var(--subtle); }
 .metric-link:focus-visible { outline: 3px solid var(--red); outline-offset: -3px; }
-.summary-strip .has-reminders { background: var(--accent-soft); box-shadow: inset 0 -4px var(--red); }
-.has-reminders .metric-link:hover { background: var(--accent-soft); }
-.has-reminders .metric-copy small, .has-reminders .metric-hint { color: var(--red); font-weight: 650; }
-.has-reminders .metric-copy strong { font-size: 40px; font-weight: 750; }
+.has-reminders .metric-copy strong { --marker-background: #991e32; --marker-text: #fff; position: relative; isolation: isolate; align-self: flex-start; padding: .04em .18em .08em; color: var(--marker-text); }
+.has-reminders .metric-copy strong::before { content: ''; position: absolute; z-index: -1; inset: .02em -.04em 0; background: var(--marker-background); transform: rotate(-1.5deg); clip-path: polygon(1% 8%, 97% 0, 100% 14%, 98% 92%, 4% 100%, 0 83%); }
+.has-reminders .metric-copy em { color: inherit; }
+:root[data-theme='dark'] .has-reminders .metric-copy strong { --marker-background: #fff; --marker-text: #991e32; }
 @media (max-width: 760px) {
   .metric-link { padding: 17px 12px; gap: 8px; }
-  .has-reminders .metric-copy strong { font-size: 32px; }
 }
 @media (max-width: 360px) {
   .metric-link { padding: 15px 10px; }
@@ -337,9 +336,6 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
 .home-reminder-copy strong { font-size: 32px; font-variant-numeric: tabular-nums; }
 .home-reminder-copy small { font-size: 14px; font-weight: 400; }
 .home-reminder-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 16px; background: white; color: var(--reminder-solid); border-radius: 8px; font-size: 15px; font-weight: 700; }
-.summary-strip .has-reminders, .has-reminders .metric-link:hover { background: var(--reminder-solid); box-shadow: none; }
-.has-reminders .metric-link, .has-reminders .metric-copy small, .has-reminders .metric-copy strong, .has-reminders .metric-copy em, .has-reminders .metric-hint { color: var(--reminder-white); }
-.summary-strip .has-reminders .metric-icon { background: #ffffff24; color: var(--reminder-white); }
 @media (max-width: 760px) {
   .home-reminder > a { grid-template-columns: 28px 1fr; gap: 12px; padding: 18px 16px; }
   .home-reminder-icon { width: 28px; height: 28px; }

@@ -228,6 +228,33 @@ h1, h2, h3 { color: var(--text); }
 .event-content h2 { font-size: 17px; margin: 10px 0 7px; }
 .event-content p { font-size: 14px; color: #85909f; line-height: 1.8; }
 .event-meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.event-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.event-footer .outline-button, .calendar-subscribe-bar button { min-height: 44px; }
+.calendar-subscribe-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.calendar-subscribe-bar strong { font-size: 15px; }
+.calendar-subscribe-bar p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.calendar-subscribe-bar button { flex-shrink: 0; }
+.calendar-dialog { color: var(--text); background: var(--surface); border-color: var(--border); }
+.calendar-dialog .calendar-summary { font-weight: 600; overflow-wrap: anywhere; }
+.calendar-dialog p { font-size: 14px; color: var(--muted); }
+.calendar-dialog .calendar-notice { padding: 12px; color: var(--text); background: var(--border); border-radius: 8px; }
+.calendar-device { display: grid; gap: 8px; margin-bottom: 16px; font-size: 14px; }
+.calendar-device select, .calendar-copy input, .calendar-copy textarea { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.calendar-device select { min-height: 44px; }
+.calendar-device select, .calendar-copy input, .calendar-copy textarea { font-size: 16px; }
+.calendar-dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.calendar-dialog a { min-height: 44px; }
+.calendar-copy { margin: 14px 0; font-size: 13px; }
+.calendar-copy label { display: grid; gap: 8px; }
+.calendar-copy input { text-overflow: ellipsis; }
+.calendar-copy textarea { resize: vertical; line-height: 1.7; }
+.calendar-copy button { margin-top: 8px; }
+.calendar-copy [role="status"] { display: block; margin-top: 6px; color: var(--muted); }
+.calendar-fallback { margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 8px; }
+.calendar-fallback summary { min-height: 32px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.calendar-fallback summary:focus-visible { outline: 3px solid #dca870; outline-offset: 4px; }
+.calendar-fallback p { margin: 10px 0; }
+@media (max-width: 600px) { .calendar-subscribe-bar { align-items: flex-start; flex-direction: column; } .calendar-dialog-actions > a { width: 100%; } }
 .status-pill.urgent { background: #fff5e5; color: #9c7e4c; }
 .status-pill.overdue { background: #fcf0f2; color: #ac5167; }
 .status-pill.done { background: #edf5f0; color: #678772; }
