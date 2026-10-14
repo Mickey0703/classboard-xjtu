@@ -19,7 +19,7 @@ export default function CalendarDialog({ event, className, onClose }: { event?: 
   const platform = calendarPlatform(navigator.userAgent, navigator.maxTouchPoints);
   const [device, setDevice] = useState(platform.device);
   const isClass = !event;
-  return <Modal title={isClass ? '订阅班级日程' : '添加到日历'} onClose={onClose} className="calendar-dialog">
+  return <Modal title={isClass ? '订阅班级日程' : '添加到日历'} titleSuffix={isClass ? <small className="calendar-beta">Beta 测试版</small> : undefined} onClose={onClose} className="calendar-dialog">
     <p className="calendar-summary">{isClass ? '订阅全部未完成日程，班委新增或修改安排后，支持订阅的手机日历会自动更新。' : event.title}</p>
     {platform.embedded && <p className="calendar-notice">当前在微信或 QQ 内打开，请点右上角菜单，选择“在浏览器中打开”，再添加或订阅日历。</p>}
     <label className="calendar-device">选择手机系统<select value={device} onChange={e => setDevice(e.target.value)}><option value="ios">iPhone / iPad</option><option value="android">安卓 · 小米 / OPPO / vivo / 荣耀等</option><option value="harmony">华为 · HarmonyOS</option><option value="other">其他设备 / 电脑</option></select></label>

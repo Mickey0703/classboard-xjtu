@@ -234,6 +234,10 @@ h1, h2, h3 { color: var(--text); }
 .calendar-subscribe-bar strong { font-size: 15px; }
 .calendar-subscribe-bar p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .calendar-subscribe-bar button { flex-shrink: 0; }
+.calendar-subscribe-entry { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.calendar-beta { font-family: inherit; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.calendar-dialog .section-head h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-width: 0; }
+.calendar-dialog .section-head > button { flex-shrink: 0; }
 .calendar-dialog { color: var(--text); background: var(--surface); border-color: var(--border); }
 .calendar-dialog .calendar-summary { font-weight: 600; overflow-wrap: anywhere; }
 .calendar-dialog p { font-size: 14px; color: var(--muted); }
