@@ -5,6 +5,7 @@ import Today from './pages/Today';
 import Schedule from './pages/Schedule';
 import Admin from './pages/Admin';
 import Notifications from './pages/Notifications';
+import { chooseCampusPhoto, rememberCampusPhoto } from './domain/campusPhotos';
 import type { RecipientStatus, Snapshot } from './domain/types';
 
 export default function App() {
@@ -14,11 +15,18 @@ export default function App() {
   });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState('');
+  const [campusPhoto] = useState(chooseCampusPhoto);
+  const photoShown = useRef(false);
   const [syncWarning, setSyncWarning] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [receipts, setReceipts] = useState<RecipientStatus[] | null>(null);
   const [receiptStatus, setReceiptStatus] = useState<'loading' | 'ready' | 'guest' | 'error'>('loading');
   const receiptRequest = useRef(0);
+  useEffect(() => {
+    if (page !== 'today' || !snapshot || error || photoShown.current) return;
+    rememberCampusPhoto(campusPhoto.id);
+    photoShown.current = true;
+  }, [campusPhoto.id, page, snapshot, error]);
   const onReceiptsChanged = useCallback((rows: RecipientStatus[]) => {
     receiptRequest.current++;
     setReceipts(rows); setReceiptStatus('ready');
@@ -67,13 +75,13 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [page]);
-  return <Shell page={page} setPage={setPage} brandName={snapshot?.className}>
+  return <Shell page={page} setPage={setPage} brandName={snapshot?.className} campusPhoto={campusPhoto}>
     {syncWarning && snapshot && page !== 'admin' && <div className="demo-banner" role="status">通知更新暂时失败，当前显示上次读取的内容。</div>}
     {page === 'admin' ? <Admin snapshot={snapshot} onSaved={refresh} onBack={() => setPage('today')}/> :
       error ? <div className="state-card"><h2>暂时无法读取班务信息</h2><p>{error}</p><button onClick={() => void refresh().catch(() => {})}>重新加载</button></div> :
-      !snapshot ? <div className="state-card">正在读取班务信息…</div> :
-      page === 'notifications' ? <Notifications snapshot={snapshot} now={now} onReceiptsChanged={onReceiptsChanged}/> :
-      page === 'today' ? <Today snapshot={snapshot} now={now} onNavigate={setPage} receipts={receipts} receiptStatus={receiptStatus}/> :
+      !snapshot ? <div className="state-card loading-panel" role="status"><span>正在读取班务信息…</span><div aria-hidden="true"><i/><i/><i/></div></div> :
+      page === 'notifications' ? <Notifications snapshot={snapshot} now={now} onReceiptsChanged={onReceiptsChanged} targetId={new URLSearchParams(window.location.search).get('notice')}/> :
+      page === 'today' ? <Today snapshot={snapshot} now={now} onNavigate={setPage} receipts={receipts} receiptStatus={receiptStatus} campusPhoto={campusPhoto}/> :
       <Schedule snapshot={snapshot} now={now}/>
     }
   </Shell>;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, LockKeyhole, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { saveAdmin } from '../api/client';
 import type { EventItem, Snapshot } from '../domain/types';
 import NotificationAdmin from '../components/NotificationAdmin';
@@ -28,9 +28,9 @@ export default function Admin({ snapshot, onSaved, onBack }: { snapshot: Snapsho
     setSuccess(`${label}成功`);
     if (path === 'events' && method !== 'DELETE') setEvent(blankEvent);
   };
-  return <div className="page-stack"><div className="page-title"><div><span className="eyebrow">CLASS MANAGEMENT</span><h1>班委管理</h1><p>发布通知，维护成员和班级事项</p></div><LockKeyhole className="title-illustration" size={52}/></div><button className="text-action" onClick={onBack}><ArrowLeft size={16}/> 返回首页</button>
+  return <div className="page-stack admin-page"><div className="page-title"><div><h1>班委管理</h1>{email && <p>{email}</p>}</div><button className="text-action" onClick={onBack}><ArrowLeft size={16} aria-hidden="true"/> 返回首页</button></div>
     {checking ? <div className="state-card">正在检查班委登录状态…</div> : !email ? <div className="state-card"><h2>班委登录</h2><p>只有班委邮箱通过验证后才能修改班务资料。</p><a className="primary-button" href="/api/admin/login">使用班委邮箱登录</a></div> : <>
-      <div className="demo-banner">当前班委：{email} · 修改会同步显示给所有访问者</div>
+      <div className="member-strip admin-publish-note">修改会同步显示给所有访问者。</div>
       <div className="admin-workspace"><nav className="admin-tabs" aria-label="班委管理菜单">{tabs.map(({ id, label }) => <button key={id} className={tab === id ? 'selected' : ''} aria-pressed={tab === id} onClick={() => { setTab(id); setError(''); setSuccess(''); }}>{label}</button>)}</nav>
       <section className="card admin-card">
         {(tab === 'notifications' || tab === 'notification-records') && <NotificationAdmin onPublished={onSaved} view={tab === 'notifications' ? 'compose' : 'records'} onViewChange={view => setTab(view === 'compose' ? 'notifications' : 'notification-records')}/>}
