@@ -6,7 +6,9 @@ const draft = { kind: 'notice', priority: 'normal', title: '通知', body: '前�
 const photo = { id: 'p1', position: 2, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' };
 it('validates inline photo positions, count, unique identifiers and real image signatures', () => {
   expect(validNotification({ ...draft, photos: [photo] })).toBe(true);
-  for (const photos of [[{ ...photo, position: 99 }], [photo, photo], [photo, { ...photo, id: 'p2' }, { ...photo, id: 'p3' }, { ...photo, id: 'p4' }], [{ ...photo, dataUrl: 'data:image/png;base64,YmFk' }]]) {
+  const photosAtLimit = Array.from({ length: 5 }, (_, index) => ({ ...photo, id: `photo-${index}` }));
+  expect(validNotification({ ...draft, photos: photosAtLimit })).toBe(true);
+  for (const photos of [[{ ...photo, position: 99 }], [photo, photo], [...photosAtLimit, photo], [{ ...photo, dataUrl: 'data:image/png;base64,YmFk' }]]) {
     expect(validNotification({ ...draft, photos })).toBe(false);
   }
 });

@@ -47,7 +47,7 @@
 
 .topbar { background: var(--page); }
 .topbar-inner { min-height: 76px; gap: 16px; }
-.brand-copy strong { font-family: var(--edition-serif); font-size: var(--brand-title-size); font-weight: 800; }
+.brand-copy strong { font-size: var(--brand-title-size); font-weight: 800; }
 .brand-copy span { color: var(--muted); }
 .bottom-nav, .notice-filters {
   --track-padding: 4px;

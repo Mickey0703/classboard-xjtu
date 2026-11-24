@@ -1,6 +1,6 @@
 import { nowShanghai } from '../admin/notification-helpers';
 import { denied, invalid, requireMember, unavailable, type MemberData, type MemberEnv } from './auth';
-import { validPhotos } from '../../../src/domain/photos';
+import { MAX_PHOTOS, validPhotos } from '../../../src/domain/photos';
 import { completionPhotoLinks, completionPhotoRefs } from '../completion-photo-helpers';
 
 interface RecipientRow { id: string; kind: 'notice' | 'task'; status: 'draft' | 'published' | 'withdrawn'; member_email: string; published_at: string; requires_completion_proof: number; completed_at: string | null }
@@ -18,7 +18,7 @@ export const onRequestPost: PagesFunction<MemberEnv, string, MemberData> = async
   let body: { notificationId?: unknown; action?: unknown; photos?: unknown; publishedAt?: unknown };
   try { body = await context.request.json() as typeof body; } catch { return invalid(); }
   if (typeof body.notificationId !== 'string' || !['ack', 'complete', 'undoComplete'].includes(String(body.action))) return invalid();
-  if (body.photos !== undefined && (body.action !== 'complete' || !validPhotos(body.photos))) return invalid('照片格式或大小无效，每次最多提交 3 张照片');
+  if (body.photos !== undefined && (body.action !== 'complete' || !validPhotos(body.photos))) return invalid(`照片格式或大小无效，每次最多提交 ${MAX_PHOTOS} 张照片`);
   const email = context.data.member!.email;
   try {
     const row = await context.env.DB.prepare('SELECT n.id, n.kind, n.status, n.published_at, n.requires_completion_proof, r.member_email, r.completed_at FROM notifications n JOIN notification_recipients r ON r.notification_id=n.id WHERE n.id=? AND r.member_email=?').bind(body.notificationId, email).first<RecipientRow>();

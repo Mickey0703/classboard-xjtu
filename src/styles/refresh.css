@@ -51,7 +51,7 @@ body { background: var(--page); color: var(--text); font-size: 15px; line-height
 .brand-mark .class-emblem { color: var(--emblem-color); }
 .brand-copy { min-width: 0; max-width: 340px; }
 .brand-copy { gap: var(--brand-copy-gap); }
-.brand-copy strong { font-family: inherit; font-weight: 650; font-size: var(--brand-title-size); line-height: 1.45; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; }
+.brand-copy strong { font-weight: 650; font-size: var(--brand-title-size); line-height: 1.45; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; }
 .brand-copy span { font-size: var(--brand-subtitle-size); line-height: 1.65; color: var(--muted); letter-spacing: 0; }
 .bottom-nav { margin-left: 48px; border: 0; border-radius: 0; padding: 0; background: none; gap: 26px; align-self: stretch; }
 .nav-item { font-size: 15px; padding: 0 3px; border-radius: 0; border-bottom: 3px solid transparent; color: var(--muted); }

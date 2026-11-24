@@ -42,6 +42,19 @@ describe('member identity and receipts', () => {
       expect(db.prepare).not.toHaveBeenCalled();
     }
   });
+  it('accepts five completion photos near the per-photo limit and rejects a sixth', async () => {
+    const dataUrl = 'data:image/png;base64,iVBORw0KGgoA' + 'A'.repeat(389_964);
+    const photos = Array.from({ length: 6 }, (_, index) => ({ id: `proof-${index}`, dataUrl }));
+    const db = fakeDb({ recipient: true, requiresProof: true });
+    const submit = (photos: unknown) => changeReceipt(ctx(db, 'POST', { notificationId: 'n1', action: 'complete', photos }));
+    expect((await submit(photos.slice(0, 5))).status).toBe(200);
+    db.prepare.mockClear();
+    const rejected = await submit(photos);
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({ error: '照片格式或大小无效，每次最多提交 5 张照片' });
+    expect((await submit([{ ...photos[0], dataUrl: dataUrl + 'AAAAAAAAAAAAAAAA' }, ...photos.slice(1, 5)])).status).toBe(400);
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
   it('requires a local test token and a roster match', async () => {
     const env = { DB: fakeDb({ roster: true }), LOCAL_DEV_MODE: 'true', LOCAL_DEV_MEMBER_EMAIL: email, LOCAL_DEV_MEMBER_TOKEN: 'member-test' };
     const next = vi.fn(async () => new Response('ok'));
